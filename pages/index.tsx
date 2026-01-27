@@ -22,13 +22,13 @@ export default function Home() {
   const handleSubmit = async () => {
     console.log("SUBMIT clicked");
 
-    if (!user) return alert('Please log in first');
+
     if (pitchesUsed >= 5) return alert('You’ve used all 5 free pitches');
 
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, email: user.email }),
+      body: JSON.stringify({ prompt, email: user?.email ?? null }),
     });
 
     const data = await res.json();
@@ -41,15 +41,14 @@ export default function Home() {
     <main style={{ padding: 40 }}>
       <h1>PR Copilot</h1>
       {!user && <button onClick={login}>Sign in with GitHub</button>}
-      {user && (
-        <>
-          <p>Welcome {user.email}</p>
-          <textarea rows={4} value={prompt} onChange={e => setPrompt(e.target.value)} />
-          <button onClick={handleSubmit}>Generate Pitch</button>
-          <pre>{output}</pre>
-          <p>{5 - pitchesUsed} free pitches remaining</p>
-        </>
-      )}
+      {user ? <p>Welcome {user.email}</p> : <p>(Not logged in — demo mode)</p>}
+
+      <textarea rows={6} value={prompt} onChange={e => setPrompt(e.target.value)} />
+      <button onClick={handleSubmit}>Generate Press Release</button>
+
+      <pre>{output}</pre>
+
+      <p>{5 - pitchesUsed} free generations remaining (local)</p>
     </main>
   );
 }
