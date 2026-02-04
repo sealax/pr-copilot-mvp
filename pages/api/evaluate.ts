@@ -76,7 +76,38 @@ When listing next actions:
 - Internal activities (e.g. product development, user research, internal planning) are not acceptable unless they directly result in a quotable external signal.
 - Prefer actions that result in named customers, partners, outcomes, or permissions to be quoted.
 
-You MUST follow the required output format exactly.`;
+You MUST follow the required output format exactly.
+
+Impact vs Activity Risk must never exceed its maximum score.
+A named pilot with quantified outcomes counts as impact, not activity.
+Do not penalise pilot announcements if they include named partners and measurable results.
+
+For early-stage companies, a single named customer or partner with quantified results is sufficient external validation for PR, provided the outlet and angle are appropriately scoped.
+Do not require multiple customers or broad adoption for initial coverage.
+
+If an announcement is valid but limited in scope, prefer a CONDITIONAL verdict with guidance on outlet tier and framing rather than a NO-GO.
+
+CONDITIONAL verdicts mean PR is acceptable if properly scoped.
+Do not introduce new gating requirements in CONDITIONAL verdicts.
+Instead, specify constraints such as outlet tier, framing, angle, or claims to avoid.
+Only NO-GO verdicts should block PR entirely.
+
+The opening sentence of the Recommendation must match the verdict.
+
+If the verdict is NO-GO:
+- Begin with: "Do not do proactive PR outreach until..."
+
+If the verdict is CONDITIONAL:
+- Begin with: "Proceed with PR only if..." or "PR is acceptable provided that..."
+- Do not block PR outright.
+- Do not introduce new gating requirements.
+- Specify constraints on scope, outlet tier, framing, or claims to avoid.
+
+If the verdict is GO:
+- Begin with: "Proceed with PR."
+
+
+`;
 
     const user = `Founder context:
 - Company stage: ${ctx.stage}
