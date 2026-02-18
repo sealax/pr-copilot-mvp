@@ -9,6 +9,15 @@ export default function Home() {
   const [user, setUser] = useState(null);
   const [pitchesUsed, setPitchesUsed] = useState(0);
 
+  const [evaluation, setEvaluation] = useState("");
+  const [verdict, setVerdict] = useState<"GO" | "CONDITIONAL" | "NO-GO" | "">("");
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const [market, setMarket] = useState("Fintech compliance");
+  const [funding, setFunding] = useState("$3M seed");
+  const [partners, setPartners] = useState("AcmePay (regulated UK fintech)");
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data?.user ?? null));
   }, []);
@@ -19,13 +28,61 @@ export default function Home() {
     console.log("LOGIN ERROR:", error);
   };
 
+  function extractVerdict(text: string): "GO" | "CONDITIONAL" | "NO-GO" | "" {
+    const m = text.match(/PR Readiness Verdict:\s*(GO|CONDITIONAL|NO-GO)/i);
+    if (!m) return "";
+    const v = m[1].toUpperCase();
+    return (v === "GO" || v === "CONDITIONAL" || v === "NO-GO") ? (v as any) : "";
+  }
+
+  const handleEvaluate = async () => {
+  if (!prompt.trim()) return alert("Add your announcement first");
+
+  setIsEvaluating(true);
+  setEvaluation("");
+  setVerdict("");
+
+  try {
+    const res = await fetch("/api/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        announcement: prompt,
+        stage: "Seed",
+        market,
+        geo: "TBD",
+        funding,
+        backers: "TBD",
+        partners,
+      }),
+    });
+
+    const data = await res.json();
+    const text = data.evaluation ?? "";
+    setEvaluation(text);
+    setVerdict(extractVerdict(text));
+  } catch (e) {
+    console.error(e);
+    alert("Evaluation failed");
+  } finally {
+    setIsEvaluating(false);
+  }
+};
+
   const handleSubmit = async () => {
     console.log("SUBMIT clicked");
 
-
+    if (!evaluation) return alert("Run PR Readiness Check first");
+    if (!(verdict === "GO" || verdict === "CONDITIONAL")) {
+      return alert("PR Readiness Verdict is NO-GO. Generation is blocked.");
+  }
     if (pitchesUsed >= 5) return alert('You’ve used all 5 free pitches');
 
+  setIsGenerating(true);
+  try {
+
     const res = await fetch('/api/generate', {
+      
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt, email: user?.email ?? null }),
@@ -35,7 +92,14 @@ export default function Home() {
     console.log("API RESPONSE:", data);
     setOutput(data.response);
     setPitchesUsed(prev => prev + 1);
+
+  } finally {
+    setIsGenerating(false);
+  }
   };
+
+
+
 
   return (
     <main style={{ padding: 40 }}>
@@ -43,8 +107,56 @@ export default function Home() {
       {!user && <button onClick={login}>Sign in with GitHub</button>}
       {user ? <p>Welcome {user.email}</p> : <p>(Not logged in — demo mode)</p>}
 
+
+
+
+      <div style={{ marginBottom: 12 }}>
+        <label>Market&nbsp;</label>
+        <input
+        value={market}
+        onChange={(e) => setMarket(e.target.value)}
+        style={{ width: 420 }}
+        />
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label>Partners/Customers&nbsp;</label>
+        <input
+        value={partners}
+        onChange={(e) => setPartners(e.target.value)}
+        style={{ width: 420 }}
+        />
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label>Funding&nbsp;</label>
+        <input
+        value={funding}
+        onChange={(e) => setFunding(e.target.value)}
+        style={{ width: 420 }}
+        />
+      </div>
+
+
+
       <textarea rows={6} value={prompt} onChange={e => setPrompt(e.target.value)} />
-      <button onClick={handleSubmit}>Generate Press Release</button>
+      <button onClick={handleEvaluate} disabled={isEvaluating}>
+  {isEvaluating ? "Evaluating..." : "Run PR Readiness Check"}
+</button>
+
+<div style={{ marginTop: 12 }}>
+  <strong>Verdict:</strong> {verdict || "(not evaluated yet)"}
+</div>
+
+<pre style={{ whiteSpace: "pre-wrap", marginTop: 12 }}>{evaluation}</pre>
+
+<button
+  onClick={handleSubmit}
+  disabled={isGenerating || !(verdict === "GO" || verdict === "CONDITIONAL")}
+  style={{ marginTop: 12 }}
+>
+  {isGenerating ? "Generating..." : "Generate Press Release"}
+</button>
 
       <pre>{output}</pre>
 
