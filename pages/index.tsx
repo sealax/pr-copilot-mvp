@@ -18,6 +18,9 @@ export default function Home() {
   const [funding, setFunding] = useState("$3M seed");
   const [partners, setPartners] = useState("AcmePay (regulated UK fintech)");
 
+  const [riskScore, setRiskScore] = useState<number | null>(null);
+  const [showFullEvaluation, setShowFullEvaluation] = useState(false);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data?.user ?? null));
   }, []);
@@ -33,6 +36,12 @@ export default function Home() {
     if (!m) return "";
     const v = m[1].toUpperCase();
     return (v === "GO" || v === "CONDITIONAL" || v === "NO-GO") ? (v as any) : "";
+  }
+
+  function extractRiskScore(text: string): number | null {
+  const m = text.match(/Overall Risk Score \(0–100\):\s*(\d+)/i);
+  if (!m) return null;
+  return parseInt(m[1], 10);
   }
 
   const handleEvaluate = async () => {
@@ -59,8 +68,12 @@ export default function Home() {
 
     const data = await res.json();
     const text = data.evaluation ?? "";
+
     setEvaluation(text);
     setVerdict(extractVerdict(text));
+    setRiskScore(extractRiskScore(text));
+    setShowFullEvaluation(false);
+
   } catch (e) {
     console.error(e);
     alert("Evaluation failed");
@@ -148,7 +161,21 @@ export default function Home() {
   <strong>Verdict:</strong> {verdict || "(not evaluated yet)"}
 </div>
 
-<pre style={{ whiteSpace: "pre-wrap", marginTop: 12 }}>{evaluation}</pre>
+<div style={{ marginTop: 6 }}>
+  <strong>Risk score:</strong> {riskScore === null ? "(n/a)" : `${riskScore}/100`}
+</div>
+
+{evaluation && (
+  <div style={{ marginTop: 12 }}>
+    <button onClick={() => setShowFullEvaluation((v) => !v)}>
+      {showFullEvaluation ? "Hide details" : "Show details"}
+    </button>
+
+    {showFullEvaluation && (
+      <pre style={{ whiteSpace: "pre-wrap", marginTop: 12 }}>{evaluation}</pre>
+    )}
+  </div>
+)}
 
 <button
   onClick={handleSubmit}
