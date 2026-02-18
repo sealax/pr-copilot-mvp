@@ -89,7 +89,7 @@ export default function Home() {
   const handleSubmit = async () => {
     console.log("SUBMIT clicked");
 
-    if (!evaluation) return alert("Run PR Readiness Check first");
+    if (!evalData) return alert("Run PR Readiness Check first");
     if (!(verdict === "GO" || verdict === "CONDITIONAL")) {
       return alert("PR Readiness Verdict is NO-GO. Generation is blocked.");
   }
