@@ -106,6 +106,44 @@ If the verdict is CONDITIONAL:
 If the verdict is GO:
 - Begin with: "Proceed with PR."
 
+Strict scoring rules:
+- Never output any risk value above its maximum (30, 20, 20, 15, 15). If uncertain, choose the maximum, not above it.
+- If the announcement includes: (a) a named customer/partner, (b) quantified outcomes, and (c) permission to quote or be named, then the verdict must not be NO-GO. Use CONDITIONAL or GO and scope the PR appropriately.
+- Do not require a second customer for early-stage coverage when the above three conditions are satisfied. Instead, recommend outlet tier and framing constraints.
+
+The Recommendation section must never contradict the verdict.
+
+You must output ONLY valid JSON, nothing else.
+
+Return JSON with this exact schema:
+{
+  "verdict": "GO" | "CONDITIONAL" | "NO-GO",
+  "risk_score": number, 
+  "risk_breakdown": {
+    "external_validation": number,
+    "beneficiary_clarity": number,
+    "explainability": number,
+    "third_party_support": number,
+    "impact_vs_activity": number
+  },
+  "primary_failure_modes": string[],
+  "journalist_reaction": string,
+  "recommendation": {
+    "summary": string,
+    "next_actions": string[]
+  }
+}
+
+Rules:
+- risk_score must be 0–100.
+- risk_breakdown values must be integers within their max:
+  external_validation max 30
+  beneficiary_clarity max 20
+  explainability max 20
+  third_party_support max 15
+  impact_vs_activity max 15
+- next_actions must have 0–3 items.
+
 
 `;
 
@@ -123,29 +161,10 @@ ${announcement}
 Evaluate this announcement for PR readiness and risk.
 
 REQUIRED OUTPUT FORMAT (no deviations):
-PR Readiness Verdict: [GO / CONDITIONAL / NO-GO]
-This announcement is not suitable for proactive PR outreach in its current form.
 
-Overall Risk Score (0–100):
-[number]
-
-Risk Breakdown (higher = worse):
-- External Validation Risk: [x/30]
-- Beneficiary Clarity Risk: [x/20]
-- Explainability Risk: [x/20]
-- Third-Party Support Risk: [x/15]
-- Impact vs Activity Risk: [x/15]
-
-Primary Failure Modes:
-- Bullet list of the main reasons this would fail with journalists
-
-Journalist Reaction Simulation:
-- One short paragraph describing how a relevant journalist would likely respond
-
-Recommendation:
-- Start with: "Do not do proactive PR outreach until..." and state exactly ONE concrete gating requirement.
-- Define what would objectively satisfy that requirement (examples or thresholds).
-- Then list up to 3 concrete next actions that directly create external, quotable validation (e.g. named customers, partners, measurable outcomes, or permission to be quoted).`;
+Return ONLY valid JSON matching the schema described in the system instructions.
+Do not include markdown, headings, or any extra text.
+`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -158,7 +177,62 @@ Recommendation:
 
     const text = completion.choices?.[0]?.message?.content ?? "";
 
-    return res.status(200).json({ evaluation: text });
+let parsed: any;
+try {
+  parsed = JSON.parse(text);
+} catch (e) {
+  console.error("Model did not return valid JSON:", text);
+  return res.status(502).json({ error: "Model returned invalid JSON", raw: text });
+}
+
+// Validate + clamp
+const clampInt = (v: any, min: number, max: number) => {
+  const n = Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : min;
+  return Math.max(min, Math.min(max, n));
+};
+
+const verdict =
+  parsed?.verdict === "GO" || parsed?.verdict === "CONDITIONAL" || parsed?.verdict === "NO-GO"
+    ? parsed.verdict
+    : "NO-GO";
+
+const risk_breakdown = {
+  external_validation: clampInt(parsed?.risk_breakdown?.external_validation, 0, 30),
+  beneficiary_clarity: clampInt(parsed?.risk_breakdown?.beneficiary_clarity, 0, 20),
+  explainability: clampInt(parsed?.risk_breakdown?.explainability, 0, 20),
+  third_party_support: clampInt(parsed?.risk_breakdown?.third_party_support, 0, 15),
+  impact_vs_activity: clampInt(parsed?.risk_breakdown?.impact_vs_activity, 0, 15),
+};
+
+const risk_score = clampInt(parsed?.risk_score, 0, 100);
+
+const primary_failure_modes = Array.isArray(parsed?.primary_failure_modes)
+  ? parsed.primary_failure_modes.map(String).slice(0, 8)
+  : [];
+
+const journalist_reaction = typeof parsed?.journalist_reaction === "string" ? parsed.journalist_reaction : "";
+
+const recommendation_summary =
+  typeof parsed?.recommendation?.summary === "string" ? parsed.recommendation.summary : "";
+
+const next_actions = Array.isArray(parsed?.recommendation?.next_actions)
+  ? parsed.recommendation.next_actions.map(String).slice(0, 3)
+  : [];
+
+return res.status(200).json({
+  verdict,
+  risk_score,
+  risk_breakdown,
+  primary_failure_modes,
+  journalist_reaction,
+  recommendation: {
+    summary: recommendation_summary,
+    next_actions,
+  },
+  raw: parsed, // keep for debugging for now; we can remove later
+});
+
+
   } catch (err) {
     console.error("Evaluation API error:", err);
     return res.status(500).json({ error: "Something went wrong on the server." });
