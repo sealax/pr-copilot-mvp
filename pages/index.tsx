@@ -162,12 +162,62 @@ export default function Home() {
 </button>
 
 <div style={{ marginTop: 12 }}>
-  <strong>Verdict:</strong> {verdict || "(not evaluated yet)"}
+  <strong>Verdict:</strong>{" "}
+  {verdict ? (
+    (() => {
+      const v = verdict.toUpperCase();
+
+      const isGo = v === "GO";
+      const isConditional = v === "CONDITIONAL";
+      const isNoGo = v === "NO-GO" || v === "NO GO";
+
+      const bg = isGo
+        ? "#d4edda"
+        : isConditional
+        ? "#fff3cd"
+        : "#f8d7da";
+
+      const color = isGo
+        ? "#155724"
+        : isConditional
+        ? "#856404"
+        : "#721c24";
+
+      return (
+        <span
+          style={{
+            padding: "4px 10px",
+            borderRadius: 6,
+            fontWeight: 600,
+            backgroundColor: bg,
+            color: color,
+          }}
+        >
+          {v}
+        </span>
+      );
+    })()
+  ) : (
+    "(not evaluated yet)"
+  )}
 </div>
 
 <div style={{ marginTop: 6 }}>
   <strong>Risk score:</strong> {riskScore === null ? "(n/a)" : `${riskScore}/100`}
 </div>
+
+{evalData?.risk_breakdown && (
+  <div style={{ marginTop: 8 }}>
+    <strong>Risk breakdown</strong>
+    <ul style={{ marginTop: 6 }}>
+      <li>External validation: {evalData.risk_breakdown.external_validation} / 30</li>
+      <li>Beneficiary clarity: {evalData.risk_breakdown.beneficiary_clarity} / 20</li>
+      <li>Explainability: {evalData.risk_breakdown.explainability} / 20</li>
+      <li>Third-party support: {evalData.risk_breakdown.third_party_support} / 15</li>
+      <li>Impact vs activity: {evalData.risk_breakdown.impact_vs_activity} / 15</li>
+    </ul>
+  </div>
+)}
 
 {evalData && (
   <div style={{ marginTop: 12 }}>
