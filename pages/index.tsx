@@ -21,6 +21,8 @@ export default function Home() {
   const [riskScore, setRiskScore] = useState<number | null>(null);
   const [showFullEvaluation, setShowFullEvaluation] = useState(false);
 
+  const [evalData, setEvalData] = useState<any>(null);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data?.user ?? null));
   }, []);
@@ -67,12 +69,14 @@ export default function Home() {
     });
 
     const data = await res.json();
-    const text = data.evaluation ?? "";
 
-    setEvaluation(text);
-    setVerdict(extractVerdict(text));
-    setRiskScore(extractRiskScore(text));
-    setShowFullEvaluation(false);
+      setEvalData(data);
+      setVerdict(data.verdict ?? "");
+      setRiskScore(typeof data.risk_score === "number" ? data.risk_score : null);
+
+      setShowFullEvaluation(false);
+
+
 
   } catch (e) {
     console.error(e);
@@ -165,14 +169,52 @@ export default function Home() {
   <strong>Risk score:</strong> {riskScore === null ? "(n/a)" : `${riskScore}/100`}
 </div>
 
-{evaluation && (
+{evalData && (
   <div style={{ marginTop: 12 }}>
     <button onClick={() => setShowFullEvaluation((v) => !v)}>
       {showFullEvaluation ? "Hide details" : "Show details"}
     </button>
 
     {showFullEvaluation && (
-      <pre style={{ whiteSpace: "pre-wrap", marginTop: 12 }}>{evaluation}</pre>
+      <div style={{ marginTop: 12 }}>
+        {Array.isArray(evalData.primary_failure_modes) &&
+          evalData.primary_failure_modes.length > 0 && (
+            <>
+              <strong>Primary failure modes</strong>
+              <ul>
+                {evalData.primary_failure_modes.slice(0, 6).map((x: string, i: number) => (
+                  <li key={i}>{x}</li>
+                ))}
+              </ul>
+            </>
+          )}
+
+        {evalData.journalist_reaction && (
+          <>
+            <strong>Journalist reaction</strong>
+            <p style={{ marginTop: 6 }}>{evalData.journalist_reaction}</p>
+          </>
+        )}
+
+        {evalData.recommendation?.summary && (
+          <>
+            <strong>Recommendation</strong>
+            <p style={{ marginTop: 6 }}>{evalData.recommendation.summary}</p>
+          </>
+        )}
+
+        {Array.isArray(evalData.recommendation?.next_actions) &&
+          evalData.recommendation.next_actions.length > 0 && (
+            <>
+              <strong>Next actions</strong>
+              <ol>
+                {evalData.recommendation.next_actions.slice(0, 3).map((x: string, i: number) => (
+                  <li key={i}>{x}</li>
+                ))}
+              </ol>
+            </>
+          )}
+      </div>
     )}
   </div>
 )}
