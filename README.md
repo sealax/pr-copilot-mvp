@@ -1,76 +1,329 @@
 # PR Copilot (MVP)
 
-PR Copilot is an AI-powered PR readiness and content generation tool.
+PR Copilot is an AI-powered PR readiness and content generation tool for founders and operators preparing serious market-entry announcements.
 
-## Core Concept
+It is designed to challenge weak stories before they go near journalists.
 
-PR Copilot helps founders validate and de-risk serious market entry announcements before speaking to media.
-
-It forces structured evaluation before content generation.
+**Status:** Local MVP working. Not yet production-ready.
 
 ---
 
-## Current Architecture (v1)
+## What It Does
+
+PR Copilot helps users:
+
+- assess whether an announcement is actually ready for PR
+- identify weaknesses and likely failure points
+- simulate likely journalist reaction
+- generate a press release draft only after evaluation
+
+This is not a generic AI writing tool.
+
+It is:
+
+- a decision engine first
+- a content generator second
+- structured
+- opinionated
+- designed to reduce reputational risk
+
+---
+
+## Current MVP Scope
+
+The current MVP supports two core flows:
 
 ### 1. PR Readiness Evaluation
-- `/api/evaluate`
-- OpenAI-powered structured JSON output
-- Server-side validation + clamping of scores
-- Returns:
-  - verdict (GO / CONDITIONAL / NO-GO)
-  - overall risk score (0–100)
-  - risk breakdown (5 dimensions)
-  - primary failure modes
-  - journalist reaction simulation
-  - recommendation + next actions
+
+The user submits a structured announcement and PR Copilot evaluates it.
+
+Current evaluation output includes:
+
+- verdict: `GO`, `CONDITIONAL`, or `NO-GO`
+- overall risk score (`0–100`)
+- risk breakdown across five dimensions
+- primary failure modes
+- journalist reaction simulation
+- recommendation and next actions
 
 Evaluation must run before generation.
 
+### 2. Press Release Generation
+
+Once evaluation has run, the user can generate a press release draft.
+
+Generation is blocked if the verdict is `NO-GO`.
+
 ---
 
-### 2. Generation
-- `/api/generate`
-- Generates press release draft
-- Blocked if verdict = NO-GO
+## Current Architecture
+
+### API Routes
+
+#### `/api/evaluate`
+
+Handles structured PR readiness evaluation.
+
+Current behaviour:
+
+- sends announcement data to OpenAI
+- expects structured JSON output
+- validates and clamps scores server-side
+- returns structured evaluation results
+
+#### `/api/generate`
+
+Handles press release generation.
+
+Current behaviour:
+
+- accepts structured announcement input
+- generates press release draft
+- blocks generation when evaluation verdict is `NO-GO`
 
 ---
 
-### 3. Frontend (Next.js + React + TypeScript)
-- Structured announcement input
-- Context fields: market, funding, partners
-- Verdict badge (green / yellow / red)
-- Risk breakdown display
-- Collapsible evaluation details
-- Generation gated by evaluation
+## Frontend Features
+
+Current frontend includes:
+
+- structured announcement input
+- context fields such as:
+  - market
+  - funding
+  - partners
+- verdict badge (`green / yellow / red`)
+- risk breakdown display
+- collapsible evaluation details
+- generation gated by evaluation result
 
 ---
 
 ## Technical Stack
 
 - Next.js (Pages Router)
-- React (TSX)
+- React
+- TypeScript
 - OpenAI API
-- Supabase (auth + future persistence)
-- Deployed locally via `npm run dev`
+- Supabase (auth + planned persistence)
+- local development via `npm run dev`
+
+---
+
+## Local Setup
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/sealax/pr-copilot-mvp.git
+cd pr-copilot-mvp
+```
+
+### 2. Install dependencies
+
+```bash
+npm install
+```
+
+### 3. Create `.env.local`
+
+Create a file called `.env.local` in the project root and add:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+```
+
+### 4. Start the local dev server
+
+```bash
+npm run dev
+```
+
+### 5. Open the app
+
+```text
+http://localhost:3000
+```
+
+---
+
+## How to Run the MVP Again Later
+
+```bash
+npm install
+npm run dev
+```
+
+Then open:
+
+```text
+http://localhost:3000
+```
+
+If you changed `.env.local`, stop and restart the dev server.
+
+---
+
+## How to Test the MVP
+
+### Evaluation flow
+
+1. Enter an announcement in the structured form
+2. Fill in the relevant context fields
+3. Run **PR Readiness Evaluation**
+4. Review:
+   - verdict
+   - overall score
+   - risk breakdown
+   - primary failure modes
+   - simulated journalist reaction
+   - recommendation / next actions
+
+### Generation flow
+
+1. Complete evaluation first
+2. If verdict is not `NO-GO`, click **Generate**
+3. Review the generated press release draft
+
+---
+
+## Current Product Logic
+
+The MVP is intentionally opinionated.
+
+### Core rule
+
+Evaluation comes first.
+
+### Generation rule
+
+If verdict is `NO-GO`, generation is blocked.
+
+### Product intent
+
+The goal is not to flatter the user.  
+The goal is to challenge weak announcements and reduce avoidable PR mistakes.
 
 ---
 
 ## Design Philosophy
 
-This is not a generic AI writing tool.
+PR Copilot is built around a simple product view:
 
-It is:
-- A decision engine first
-- A content generator second
-- Structured
-- Opinionated
-- Designed to challenge weak announcements
+- weak announcements should be challenged, not polished
+- good PR starts with story quality, not just copy quality
+- AI should help founders think better, not just write faster
+
+That is why the product flow is:
+
+**evaluate first → generate second**
+
+not:
+
+**generate instantly and hope for the best**
 
 ---
 
-## Next Steps
+## Current Limitations
 
-- Persist evaluation + generation history (Supabase)
-- Real auth + server-side usage limits
-- Prompt systematisation by announcement type
-- Positioning refinement
+This is still an MVP.
+
+Current limitations include:
+
+- no persistent evaluation history yet
+- no persistent generation history yet
+- no full production auth flow yet
+- no server-side usage limit enforcement yet
+- no announcement-type prompt system yet
+- limited product polish and dashboard sophistication
+
+---
+
+## Common Issues
+
+### `npm` not recognised
+
+Node.js is not installed properly, or is not available in your terminal path.
+
+### App loads but API features fail
+
+Check `.env.local` and restart the server.
+
+### OpenAI quota or billing error
+
+Your OpenAI billing, credit, or usage cap needs updating.
+
+### Supabase auth issues
+
+Check:
+
+- project URL
+- anon key
+- provider settings
+- redirect URLs
+
+### `.env.local` changes not taking effect
+
+Restart the dev server:
+
+```bash
+Ctrl + C
+npm run dev
+```
+
+---
+
+## Suggested Next Steps
+
+### Product
+
+- persist evaluation history in Supabase
+- persist generation history in Supabase
+- add real auth
+- add server-side usage limits
+- build prompt systems by announcement type
+- refine positioning and onboarding copy
+
+### UX / UI
+
+- improve dashboard design
+- improve output presentation
+- add saved history view
+- add export / copy workflow
+- improve premium feel and trust signals
+
+### Business
+
+- sharpen positioning against “just use ChatGPT”
+- test with real founders and PR users
+- validate willingness to pay
+- add pricing / upgrade path
+
+---
+
+## Positioning
+
+PR Copilot is not trying to compete as a general writing assistant.
+
+It is trying to win on:
+
+- PR-specific decision support
+- structured readiness assessment
+- challenge and critique
+- faster founder-side comms execution
+- reduced dependence on agencies for first-pass work
+
+---
+
+## Repo Purpose
+
+This repository is the working codebase for the PR Copilot MVP.
+
+It exists to:
+
+- test the core product logic
+- validate the evaluate-then-generate workflow
+- prove the concept before persistence, billing, and production polish are added
