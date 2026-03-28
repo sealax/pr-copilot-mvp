@@ -29,15 +29,20 @@ export default function Home() {
 
   const [evalData, setEvalData] = useState<any>(null);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data?.user ?? null));
-  }, []);
+useEffect(() => {
+  if (!supabase) return;
+  supabase.auth.getUser().then(({ data }) => setUser(data?.user ?? null));
+}, []);
 
-  const login = async () => {
-    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'github' });
-    console.log("LOGIN DATA:", data);
-    console.log("LOGIN ERROR:", error);
-  };
+const login = async () => {
+  if (!supabase) {
+    alert("Supabase is not configured");
+    return;
+  }
+  const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'github' });
+  console.log("LOGIN DATA:", data);
+  console.log("LOGIN ERROR:", error);
+};
 
   function extractVerdict(text: string): "GO" | "CONDITIONAL" | "NO-GO" | "" {
     const m = text.match(/PR Readiness Verdict:\s*(GO|CONDITIONAL|NO-GO)/i);
