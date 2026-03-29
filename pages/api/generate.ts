@@ -1,6 +1,13 @@
 import OpenAI from 'openai';
 
+import { createClient } from '@supabase/supabase-js';
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export default async function handler(req, res) {
   try {
@@ -42,7 +49,25 @@ ${prompt}`;
 
     const text = completion.choices?.[0]?.message?.content ?? '';
 
-    return res.status(200).json({ response: text });
+    const { data, error } = await supabase
+      .from("generations")
+      .insert({
+        prompt,
+        output: text,
+        model: "gpt-4o-mini",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Supabase insert error:", error);
+    }
+
+    return res.status(200).json({
+      response: text,
+      generation_id: data?.id ?? null,
+    });
+
   } catch (err) {
     console.error('API error:', err);
     return res.status(500).json({ error: 'Something went wrong on the server.' });
