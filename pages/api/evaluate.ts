@@ -1,6 +1,13 @@
 import OpenAI from "openai";
 
+import { createClient } from "@supabase/supabase-js";
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export default async function handler(req, res) {
   try {
@@ -118,7 +125,7 @@ You must output ONLY valid JSON, nothing else.
 Return JSON with this exact schema:
 {
   "verdict": "GO" | "CONDITIONAL" | "NO-GO",
-  "risk_score": number, 
+  "risk_score": number,
   "risk_breakdown": {
     "external_validation": number,
     "beneficiary_clarity": number,
@@ -218,6 +225,25 @@ const recommendation_summary =
 const next_actions = Array.isArray(parsed?.recommendation?.next_actions)
   ? parsed.recommendation.next_actions.map(String).slice(0, 3)
   : [];
+
+await supabase.from("evaluations").insert({
+  announcement,
+  market: ctx.market,
+  partners: ctx.partners,
+  funding: ctx.funding,
+  verdict,
+  risk_score,
+  evaluation_json: {
+    risk_breakdown,
+    primary_failure_modes,
+    journalist_reaction,
+    recommendation: {
+      summary: recommendation_summary,
+      next_actions,
+    },
+    raw: parsed,
+  },
+});
 
 return res.status(200).json({
   verdict,
