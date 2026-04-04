@@ -28,11 +28,34 @@ export default function Home() {
   const [showFullEvaluation, setShowFullEvaluation] = useState(false);
 
   const [evalData, setEvalData] = useState<any>(null);
+  const [history, setHistory] = useState<any[]>([]);
+  const [selectedGeneration, setSelectedGeneration] = useState<any>(null);
 
 useEffect(() => {
   if (!supabase) return;
   supabase.auth.getUser().then(({ data }) => setUser(data?.user ?? null));
 }, []);
+
+useEffect(() => {
+  if (!user) return;
+
+  const fetchHistory = async () => {
+    const { data, error } = await supabase
+      .from("evaluations")
+      .select("*, generations(id)")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    if (error) {
+      console.error("Error fetching history:", error);
+    } else {
+      setHistory(data || []);
+    }
+  };
+
+  fetchHistory();
+}, [user]);
 
 const login = async () => {
   if (!supabase) {
@@ -297,6 +320,54 @@ const login = async () => {
       <pre>{output}</pre>
 
       <p>{5 - pitchesUsed} free generations remaining (local)</p>
+
+
+<h3>Recent evaluations</h3>
+
+{history.length === 0 && <p>No history yet</p>}
+
+<ul>
+  {history.map((item) => (
+    <li
+      key={item.id}
+
+      onClick={async () => {
+        setEvalData(item.evaluation_json?.raw ?? null);
+        setVerdict(item.verdict ?? "");
+        setRiskScore(item.risk_score ?? null);
+        setPrompt(item.announcement ?? "");
+        setMarket(item.market ?? "");
+        setPartners(item.partners ?? "");
+        setFunding(item.funding ?? "");
+
+        const { data, error } = await supabase
+          .from("generations")
+          .select("*")
+          .eq("evaluation_id", item.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (error) {
+          console.error("Error fetching generation:", error);
+          setSelectedGeneration(null);
+          setOutput("");
+        } else {
+          setSelectedGeneration(data);
+          setOutput(data?.output ?? "");
+        }
+      }}
+
+      style={{ cursor: "pointer", marginBottom: 8 }}
+    >
+      <strong>{item.verdict}</strong>
+      {" "}
+      {item.generations && item.generations.length > 0 ? "• generated" : "• no generation"}
+      {" — "}
+      {item.announcement?.slice(0, 60)}...
+    </li>
+  ))}
+</ul>
     </main>
   );
 }
