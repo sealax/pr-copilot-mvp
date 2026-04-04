@@ -118,6 +118,7 @@ const login = async () => {
         prompt,
         email: user?.email ?? null,
         user_id: user?.id ?? null,
+        evaluation_id: evalData?.id ?? null,
   }),
     });
 

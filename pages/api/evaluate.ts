@@ -227,27 +227,56 @@ const next_actions = Array.isArray(parsed?.recommendation?.next_actions)
   ? parsed.recommendation.next_actions.map(String).slice(0, 3)
   : [];
 
-await supabase.from("evaluations").insert({
-  user_id: user_id ?? null,
-  announcement,
-  market: ctx.market,
-  partners: ctx.partners,
-  funding: ctx.funding,
-  verdict,
-  risk_score,
-  evaluation_json: {
-    risk_breakdown,
-    primary_failure_modes,
-    journalist_reaction,
-    recommendation: {
-      summary: recommendation_summary,
-      next_actions,
+// await supabase.from("evaluations").insert({
+//   user_id: user_id ?? null,
+//   announcement,
+//   market: ctx.market,
+//   partners: ctx.partners,
+//   funding: ctx.funding,
+//   verdict,
+//   risk_score,
+//   evaluation_json: {
+//     risk_breakdown,
+//     primary_failure_modes,
+//     journalist_reaction,
+//     recommendation: {
+//       summary: recommendation_summary,
+//       next_actions,
+//     },
+//     raw: parsed,
+//   },
+// });
+
+const { data: insertedEvaluation, error: insertError } = await supabase
+  .from("evaluations")
+  .insert({
+    user_id: user_id ?? null,
+    announcement,
+    market: ctx.market,
+    partners: ctx.partners,
+    funding: ctx.funding,
+    verdict,
+    risk_score,
+    evaluation_json: {
+      risk_breakdown,
+      primary_failure_modes,
+      journalist_reaction,
+      recommendation: {
+        summary: recommendation_summary,
+        next_actions,
+      },
+      raw: parsed,
     },
-    raw: parsed,
-  },
-});
+  })
+  .select()        // ← NEW
+  .single();       // ← NEW
+
+if (insertError) {  // ← NEW
+  console.error("Supabase insert error:", insertError);
+}
 
 return res.status(200).json({
+  id: insertedEvaluation?.id ?? null,
   verdict,
   risk_score,
   risk_breakdown,
