@@ -15,7 +15,7 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { prompt } = req.body;
+    const { prompt, user_id } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Missing prompt' });
@@ -52,6 +52,7 @@ ${prompt}`;
     const { data, error } = await supabase
       .from("generations")
       .insert({
+        user_id: user_id ?? null,
         prompt,
         output: text,
         model: "gpt-4o-mini",

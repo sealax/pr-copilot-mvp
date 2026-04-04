@@ -23,6 +23,7 @@ export default async function handler(req, res) {
       funding,
       backers,
       partners,
+      user_id,
     } = req.body ?? {};
 
     if (!announcement || typeof announcement !== "string") {
@@ -227,6 +228,7 @@ const next_actions = Array.isArray(parsed?.recommendation?.next_actions)
   : [];
 
 await supabase.from("evaluations").insert({
+  user_id: user_id ?? null,
   announcement,
   market: ctx.market,
   partners: ctx.partners,

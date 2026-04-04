@@ -76,6 +76,7 @@ const login = async () => {
         funding,
         backers: "TBD",
         partners,
+        user_id: user?.id ?? null,
       }),
     });
 
@@ -113,7 +114,11 @@ const login = async () => {
 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, email: user?.email ?? null }),
+      body: JSON.stringify({
+        prompt,
+        email: user?.email ?? null,
+        user_id: user?.id ?? null,
+  }),
     });
 
     const data = await res.json();
