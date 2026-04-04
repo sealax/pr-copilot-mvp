@@ -62,7 +62,12 @@ const login = async () => {
     alert("Supabase is not configured");
     return;
   }
-  const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'github' });
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "github",
+    options: {
+      redirectTo: window.location.origin,
+    },
+  });
   console.log("LOGIN DATA:", data);
   console.log("LOGIN ERROR:", error);
 };
