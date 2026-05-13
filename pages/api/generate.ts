@@ -21,6 +21,29 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing prompt' });
     }
 
+    if (!evaluation_id || typeof evaluation_id !== 'string') {
+      return res.status(400).json({ error: 'Missing evaluation_id' });
+    }
+
+    let evaluationQuery = supabase
+      .from("evaluations")
+      .select("id, verdict, user_id")
+      .eq("id", evaluation_id);
+
+    if (user_id && typeof user_id === "string") {
+      evaluationQuery = evaluationQuery.eq("user_id", user_id);
+    }
+
+    const { data: evaluation, error: evaluationError } = await evaluationQuery.single();
+
+    if (evaluationError || !evaluation) {
+      return res.status(404).json({ error: "Evaluation not found" });
+    }
+
+    if (evaluation.verdict === "NO-GO") {
+      return res.status(403).json({ error: "Generation is blocked for NO-GO evaluations" });
+    }
+
     const system = `You are a senior tech PR professional.
 Write crisp, credible press releases. Avoid hype and generic advice.
 If key details are missing, make minimal reasonable assumptions and mark them as [TBD].`;
