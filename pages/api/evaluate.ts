@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { createHmac } from "crypto";
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -8,6 +9,20 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+const tokenSecret = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.OPENAI_API_KEY ?? "";
+
+function signEvaluationToken(announcement: string, verdict: string) {
+  const payload = Buffer.from(
+    JSON.stringify({
+      verdict,
+      announcement_hash: createHmac("sha256", tokenSecret).update(announcement).digest("hex"),
+    })
+  ).toString("base64url");
+  const signature = createHmac("sha256", tokenSecret).update(payload).digest("base64url");
+
+  return `${payload}.${signature}`;
+}
 
 export default async function handler(req, res) {
   try {
@@ -277,6 +292,7 @@ if (insertError) {  // ← NEW
 
 return res.status(200).json({
   id: insertedEvaluation?.id ?? null,
+  evaluation_token: signEvaluationToken(announcement, verdict),
   verdict,
   risk_score,
   risk_breakdown,
