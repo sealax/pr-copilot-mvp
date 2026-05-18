@@ -91,6 +91,8 @@ const login = async () => {
   setIsEvaluating(true);
   setEvaluation("");
   setVerdict("");
+  setOutput("");
+  setSelectedGeneration(null);
 
   try {
     const res = await fetch("/api/evaluate", {
@@ -133,6 +135,9 @@ const login = async () => {
     if (!(verdict === "GO" || verdict === "CONDITIONAL")) {
       return alert("PR Readiness Verdict is NO-GO. Generation is blocked.");
   }
+    if (!evalData.id && !evalData.evaluation_token) {
+      return alert("Evaluation state is missing, so generation cannot run. Please run the readiness check again.");
+    }
     if (pitchesUsed >= 5) return alert('You’ve used all 5 free pitches');
 
   setIsGenerating(true);
@@ -147,11 +152,21 @@ const login = async () => {
         email: user?.email ?? null,
         user_id: user?.id ?? null,
         evaluation_id: evalData?.id ?? null,
+        evaluation_token: evalData?.evaluation_token ?? null,
   }),
     });
 
     const data = await res.json();
     console.log("API RESPONSE:", data);
+
+    if (!res.ok) {
+      return alert(data?.error ?? "Generation failed");
+    }
+
+    if (typeof data.response !== "string" || data.response.length === 0) {
+      return alert("Generation returned no draft");
+    }
+
     setOutput(data.response);
     setPitchesUsed(prev => prev + 1);
 

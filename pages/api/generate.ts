@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -9,38 +10,77 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const tokenSecret = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.OPENAI_API_KEY ?? "";
+
+function verifyEvaluationToken(token: string, prompt: string) {
+  const [payload, signature] = token.split(".");
+
+  if (!payload || !signature) return null;
+
+  const expectedSignature = createHmac("sha256", tokenSecret).update(payload).digest("base64url");
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+
+  if (
+    signatureBuffer.length !== expectedBuffer.length ||
+    !timingSafeEqual(signatureBuffer, expectedBuffer)
+  ) {
+    return null;
+  }
+
+  const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  const expectedAnnouncementHash = createHmac("sha256", tokenSecret).update(prompt).digest("hex");
+
+  if (parsed?.announcement_hash !== expectedAnnouncementHash) return null;
+
+  return parsed?.verdict === "GO" || parsed?.verdict === "CONDITIONAL" || parsed?.verdict === "NO-GO"
+    ? parsed.verdict
+    : null;
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { prompt, user_id, evaluation_id } = req.body;
+    const { prompt, user_id, evaluation_id, evaluation_token } = req.body;
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Missing prompt' });
     }
 
-    if (!evaluation_id || typeof evaluation_id !== 'string') {
-      return res.status(400).json({ error: 'Missing evaluation_id' });
+    let evaluationId = typeof evaluation_id === "string" ? evaluation_id : null;
+    let evaluationVerdict: "GO" | "CONDITIONAL" | "NO-GO" | null = null;
+
+    if (evaluationId) {
+      let evaluationQuery = supabase
+        .from("evaluations")
+        .select("id, verdict, user_id")
+        .eq("id", evaluationId);
+
+      if (user_id && typeof user_id === "string") {
+        evaluationQuery = evaluationQuery.eq("user_id", user_id);
+      }
+
+      const { data: evaluation, error: evaluationError } = await evaluationQuery.single();
+
+      if (evaluationError || !evaluation) {
+        return res.status(404).json({ error: "Evaluation not found" });
+      }
+
+      evaluationVerdict = evaluation.verdict;
+    } else if (typeof evaluation_token === "string") {
+      evaluationVerdict = verifyEvaluationToken(evaluation_token, prompt);
+
+      if (!evaluationVerdict) {
+        return res.status(400).json({ error: "Invalid evaluation token" });
+      }
+    } else {
+      return res.status(400).json({ error: "Missing evaluation_id" });
     }
 
-    let evaluationQuery = supabase
-      .from("evaluations")
-      .select("id, verdict, user_id")
-      .eq("id", evaluation_id);
-
-    if (user_id && typeof user_id === "string") {
-      evaluationQuery = evaluationQuery.eq("user_id", user_id);
-    }
-
-    const { data: evaluation, error: evaluationError } = await evaluationQuery.single();
-
-    if (evaluationError || !evaluation) {
-      return res.status(404).json({ error: "Evaluation not found" });
-    }
-
-    if (evaluation.verdict === "NO-GO") {
+    if (evaluationVerdict === "NO-GO") {
       return res.status(403).json({ error: "Generation is blocked for NO-GO evaluations" });
     }
 
@@ -75,7 +115,7 @@ ${prompt}`;
     const { data, error } = await supabase
       .from("generations")
       .insert({
-        evaluation_id: evaluation_id ?? null,
+        evaluation_id: evaluationId,
         user_id: user_id ?? null,
         prompt,
         output: text,
