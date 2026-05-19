@@ -90,6 +90,21 @@ const logout = async () => {
   setHistory([]);
 };
 
+const getApiHeaders = async () => {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (!supabase) return headers;
+
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`;
+  }
+
+  return headers;
+};
+
   function extractVerdict(text: string): "GO" | "CONDITIONAL" | "NO-GO" | "" {
     const m = text.match(/PR Readiness Verdict:\s*(GO|CONDITIONAL|NO-GO)/i);
     if (!m) return "";
@@ -113,9 +128,11 @@ const logout = async () => {
   setSelectedGeneration(null);
 
   try {
+    const headers = await getApiHeaders();
+
     const res = await fetch("/api/evaluate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         announcement: prompt,
         stage: "Seed",
@@ -124,7 +141,6 @@ const logout = async () => {
         funding,
         backers: "TBD",
         partners,
-        user_id: user?.id ?? null,
       }),
     });
 
@@ -160,15 +176,15 @@ const logout = async () => {
 
   setIsGenerating(true);
   try {
+    const headers = await getApiHeaders();
 
     const res = await fetch('/api/generate', {
 
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         prompt,
         email: user?.email ?? null,
-        user_id: user?.id ?? null,
         evaluation_id: evalData?.id ?? null,
         evaluation_token: evalData?.evaluation_token ?? null,
   }),

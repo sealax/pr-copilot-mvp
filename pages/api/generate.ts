@@ -12,6 +12,23 @@ const supabase = createClient(
 
 const tokenSecret = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.OPENAI_API_KEY ?? "";
 
+async function getVerifiedUser(req) {
+  const authHeader = Array.isArray(req.headers.authorization)
+    ? req.headers.authorization[0]
+    : req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) return null;
+
+  const accessToken = authHeader.slice("Bearer ".length);
+  const { data, error } = await supabase.auth.getUser(accessToken);
+
+  if (error || !data?.user) {
+    throw new Error("Invalid Supabase access token");
+  }
+
+  return data.user;
+}
+
 function verifyEvaluationToken(token: string, prompt: string) {
   const [payload, signature] = token.split(".");
 
@@ -44,7 +61,8 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { prompt, user_id, evaluation_id, evaluation_token } = req.body;
+    const { prompt, evaluation_id, evaluation_token } = req.body;
+    const verifiedUser = await getVerifiedUser(req);
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Missing prompt' });
@@ -59,8 +77,10 @@ export default async function handler(req, res) {
         .select("id, verdict, user_id")
         .eq("id", evaluationId);
 
-      if (user_id && typeof user_id === "string") {
-        evaluationQuery = evaluationQuery.eq("user_id", user_id);
+      if (verifiedUser) {
+        evaluationQuery = evaluationQuery.eq("user_id", verifiedUser.id);
+      } else {
+        evaluationQuery = evaluationQuery.is("user_id", null);
       }
 
       const { data: evaluation, error: evaluationError } = await evaluationQuery.single();
@@ -116,7 +136,7 @@ ${prompt}`;
       .from("generations")
       .insert({
         evaluation_id: evaluationId,
-        user_id: user_id ?? null,
+        user_id: verifiedUser?.id ?? null,
         prompt,
         output: text,
         model: "gpt-4o-mini",
@@ -134,6 +154,10 @@ ${prompt}`;
     });
 
   } catch (err) {
+    if (err instanceof Error && err.message === "Invalid Supabase access token") {
+      return res.status(401).json({ error: "Invalid Supabase access token" });
+    }
+
     console.error('API error:', err);
     return res.status(500).json({ error: 'Something went wrong on the server.' });
   }
