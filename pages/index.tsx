@@ -72,6 +72,24 @@ const login = async () => {
   console.log("LOGIN ERROR:", error);
 };
 
+const logout = async () => {
+  if (!supabase) {
+    alert("Supabase is not configured");
+    return;
+  }
+
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    console.error("LOGOUT ERROR:", error);
+    alert("Logout failed");
+    return;
+  }
+
+  setUser(null);
+  setHistory([]);
+};
+
 const getApiHeaders = async () => {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
@@ -198,7 +216,13 @@ const getApiHeaders = async () => {
     <main style={{ padding: 40 }}>
       <h1>PR Copilot</h1>
       {!user && <button onClick={login}>Sign in with GitHub</button>}
-      {user ? <p>Welcome {user.email}</p> : <p>(Not logged in — demo mode)</p>}
+      {user ? (
+        <p>
+          Welcome {user.email} <button onClick={logout}>Log out</button>
+        </p>
+      ) : (
+        <p>(Not logged in — demo mode)</p>
+      )}
 
 
 
