@@ -13,7 +13,8 @@ export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [output, setOutput] = useState('');
   const [user, setUser] = useState(null);
-  const [pitchesUsed, setPitchesUsed] = useState(0);
+  const [remainingGenerations, setRemainingGenerations] = useState<number | null>(null);
+  const [generationLimit, setGenerationLimit] = useState(5);
 
   const [evaluation, setEvaluation] = useState("");
   const [verdict, setVerdict] = useState<"GO" | "CONDITIONAL" | "NO-GO" | "">("");
@@ -94,6 +95,7 @@ const logout = async () => {
   setPrompt("");
   setOutput("");
   setSelectedGeneration(null);
+  setRemainingGenerations(null);
 };
 
 const getApiHeaders = async () => {
@@ -114,6 +116,28 @@ const getApiHeaders = async () => {
 
   return headers;
 };
+
+const fetchUsage = async () => {
+  const headers = await getApiHeaders();
+  const res = await fetch("/api/usage", { headers });
+  const data = await res.json();
+
+  if (!res.ok) {
+    console.error("Usage API error:", data);
+    return;
+  }
+
+  setRemainingGenerations(
+    typeof data.remaining_generations === "number" ? data.remaining_generations : null
+  );
+  setGenerationLimit(typeof data.generation_limit === "number" ? data.generation_limit : 5);
+};
+
+useEffect(() => {
+  if (!user) return;
+
+  fetchUsage().catch((e) => console.error("Usage fetch failed:", e));
+}, [user]);
 
   function extractVerdict(text: string): "GO" | "CONDITIONAL" | "NO-GO" | "" {
     const m = text.match(/PR Readiness Verdict:\s*(GO|CONDITIONAL|NO-GO)/i);
@@ -188,7 +212,9 @@ const getApiHeaders = async () => {
     if (!evalData.id) {
       return alert("Evaluation was not saved, so generation cannot run. Please run the readiness check again.");
     }
-    if (pitchesUsed >= 5) return alert('You’ve used all 5 free pitches');
+    if (remainingGenerations !== null && remainingGenerations <= 0) {
+      return alert("You’ve used all 5 free generations");
+    }
 
   setIsGenerating(true);
   try {
@@ -217,7 +243,9 @@ const getApiHeaders = async () => {
     }
 
     setOutput(data.response);
-    setPitchesUsed(prev => prev + 1);
+    if (typeof data.remaining_generations === "number") {
+      setRemainingGenerations(data.remaining_generations);
+    }
 
   } catch (e) {
     console.error(e);
@@ -397,7 +425,13 @@ const getApiHeaders = async () => {
 
       <pre>{output}</pre>
 
-      <p>{5 - pitchesUsed} free generations remaining (local)</p>
+      <p>
+        {user
+          ? remainingGenerations === null
+            ? "Checking free generations remaining..."
+            : `${remainingGenerations} of ${generationLimit} free generations remaining`
+          : "Sign in to view free generations remaining"}
+      </p>
 
 
 <h3>Recent evaluations</h3>
