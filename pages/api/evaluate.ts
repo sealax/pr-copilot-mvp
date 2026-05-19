@@ -1,5 +1,4 @@
 import OpenAI from "openai";
-import { createHmac } from "crypto";
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -10,14 +9,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const tokenSecret = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.OPENAI_API_KEY ?? "";
-
 async function getVerifiedUser(req) {
   const authHeader = Array.isArray(req.headers.authorization)
     ? req.headers.authorization[0]
     : req.headers.authorization;
 
-  if (!authHeader?.startsWith("Bearer ")) return null;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new Error("Missing Supabase access token");
+  }
 
   const accessToken = authHeader.slice("Bearer ".length);
   const { data, error } = await supabase.auth.getUser(accessToken);
@@ -27,18 +26,6 @@ async function getVerifiedUser(req) {
   }
 
   return data.user;
-}
-
-function signEvaluationToken(announcement: string, verdict: string) {
-  const payload = Buffer.from(
-    JSON.stringify({
-      verdict,
-      announcement_hash: createHmac("sha256", tokenSecret).update(announcement).digest("hex"),
-    })
-  ).toString("base64url");
-  const signature = createHmac("sha256", tokenSecret).update(payload).digest("base64url");
-
-  return `${payload}.${signature}`;
 }
 
 export default async function handler(req, res) {
@@ -259,30 +246,10 @@ const next_actions = Array.isArray(parsed?.recommendation?.next_actions)
   ? parsed.recommendation.next_actions.map(String).slice(0, 3)
   : [];
 
-// await supabase.from("evaluations").insert({
-//   user_id: user_id ?? null,
-//   announcement,
-//   market: ctx.market,
-//   partners: ctx.partners,
-//   funding: ctx.funding,
-//   verdict,
-//   risk_score,
-//   evaluation_json: {
-//     risk_breakdown,
-//     primary_failure_modes,
-//     journalist_reaction,
-//     recommendation: {
-//       summary: recommendation_summary,
-//       next_actions,
-//     },
-//     raw: parsed,
-//   },
-// });
-
 const { data: insertedEvaluation, error: insertError } = await supabase
   .from("evaluations")
   .insert({
-    user_id: verifiedUser?.id ?? null,
+    user_id: verifiedUser.id,
     announcement,
     market: ctx.market,
     partners: ctx.partners,
@@ -309,7 +276,6 @@ if (insertError) {  // ← NEW
 
 return res.status(200).json({
   id: insertedEvaluation?.id ?? null,
-  evaluation_token: signEvaluationToken(announcement, verdict),
   verdict,
   risk_score,
   risk_breakdown,
@@ -324,6 +290,10 @@ return res.status(200).json({
 
 
   } catch (err) {
+    if (err instanceof Error && err.message === "Missing Supabase access token") {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
     if (err instanceof Error && err.message === "Invalid Supabase access token") {
       return res.status(401).json({ error: "Invalid Supabase access token" });
     }

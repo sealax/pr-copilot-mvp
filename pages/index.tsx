@@ -88,19 +88,29 @@ const logout = async () => {
 
   setUser(null);
   setHistory([]);
+  setEvalData(null);
+  setVerdict("");
+  setRiskScore(null);
+  setPrompt("");
+  setOutput("");
+  setSelectedGeneration(null);
 };
 
 const getApiHeaders = async () => {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
-  if (!supabase) return headers;
+  if (!supabase) {
+    throw new Error("Authentication required");
+  }
 
   const { data } = await supabase.auth.getSession();
   const accessToken = data.session?.access_token;
 
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
+  if (!accessToken) {
+    throw new Error("Authentication required");
   }
+
+  headers.Authorization = `Bearer ${accessToken}`;
 
   return headers;
 };
@@ -119,6 +129,7 @@ const getApiHeaders = async () => {
   }
 
   const handleEvaluate = async () => {
+  if (!user) return alert("Sign in to run a PR readiness check");
   if (!prompt.trim()) return alert("Add your announcement first");
 
   setIsEvaluating(true);
@@ -146,6 +157,10 @@ const getApiHeaders = async () => {
 
     const data = await res.json();
 
+      if (!res.ok) {
+        return alert(data?.error ?? "Evaluation failed");
+      }
+
       setEvalData(data);
       setVerdict(data.verdict ?? "");
       setRiskScore(typeof data.risk_score === "number" ? data.risk_score : null);
@@ -156,7 +171,7 @@ const getApiHeaders = async () => {
 
   } catch (e) {
     console.error(e);
-    alert("Evaluation failed");
+    alert(e instanceof Error && e.message === "Authentication required" ? "Sign in to run a PR readiness check" : "Evaluation failed");
   } finally {
     setIsEvaluating(false);
   }
@@ -165,12 +180,13 @@ const getApiHeaders = async () => {
   const handleSubmit = async () => {
     console.log("SUBMIT clicked");
 
+    if (!user) return alert("Sign in to generate a press release");
     if (!evalData) return alert("Run PR Readiness Check first");
     if (!(verdict === "GO" || verdict === "CONDITIONAL")) {
       return alert("PR Readiness Verdict is NO-GO. Generation is blocked.");
   }
-    if (!evalData.id && !evalData.evaluation_token) {
-      return alert("Evaluation state is missing, so generation cannot run. Please run the readiness check again.");
+    if (!evalData.id) {
+      return alert("Evaluation was not saved, so generation cannot run. Please run the readiness check again.");
     }
     if (pitchesUsed >= 5) return alert('You’ve used all 5 free pitches');
 
@@ -186,7 +202,6 @@ const getApiHeaders = async () => {
         prompt,
         email: user?.email ?? null,
         evaluation_id: evalData?.id ?? null,
-        evaluation_token: evalData?.evaluation_token ?? null,
   }),
     });
 
@@ -204,6 +219,9 @@ const getApiHeaders = async () => {
     setOutput(data.response);
     setPitchesUsed(prev => prev + 1);
 
+  } catch (e) {
+    console.error(e);
+    alert(e instanceof Error && e.message === "Authentication required" ? "Sign in to generate a press release" : "Generation failed");
   } finally {
     setIsGenerating(false);
   }
@@ -257,7 +275,7 @@ const getApiHeaders = async () => {
 
 
       <textarea rows={6} value={prompt} onChange={e => setPrompt(e.target.value)} />
-      <button onClick={handleEvaluate} disabled={isEvaluating}>
+      <button onClick={handleEvaluate} disabled={isEvaluating || !user}>
   {isEvaluating ? "Evaluating..." : "Run PR Readiness Check"}
 </button>
 
@@ -371,7 +389,7 @@ const getApiHeaders = async () => {
 
 <button
   onClick={handleSubmit}
-  disabled={isGenerating || !(verdict === "GO" || verdict === "CONDITIONAL")}
+  disabled={isGenerating || !user || !(verdict === "GO" || verdict === "CONDITIONAL")}
   style={{ marginTop: 12 }}
 >
   {isGenerating ? "Generating..." : "Generate Press Release"}
