@@ -9,6 +9,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const FREE_GENERATION_LIMIT = 5;
+
 async function getVerifiedUser(req) {
   const authHeader = Array.isArray(req.headers.authorization)
     ? req.headers.authorization[0]
@@ -39,6 +41,24 @@ export default async function handler(req, res) {
 
     if (!prompt || typeof prompt !== 'string') {
       return res.status(400).json({ error: 'Missing prompt' });
+    }
+
+    const { count: generationsUsed, error: usageError } = await supabase
+      .from("generations")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", verifiedUser.id);
+
+    if (usageError || typeof generationsUsed !== "number") {
+      console.error("Supabase usage count error:", usageError);
+      return res.status(500).json({ error: "Could not check generation usage" });
+    }
+
+    if (generationsUsed >= FREE_GENERATION_LIMIT) {
+      return res.status(403).json({
+        error: "Free generation limit reached",
+        generations_used: generationsUsed,
+        remaining_generations: 0,
+      });
     }
 
     let evaluationId = typeof evaluation_id === "string" ? evaluation_id : null;
@@ -107,11 +127,16 @@ ${prompt}`;
 
     if (error) {
       console.error("Supabase insert error:", error);
+      return res.status(500).json({ error: "Could not save generation" });
     }
+
+    const nextGenerationsUsed = generationsUsed + 1;
 
     return res.status(200).json({
       response: text,
       generation_id: data?.id ?? null,
+      generations_used: nextGenerationsUsed,
+      remaining_generations: Math.max(0, FREE_GENERATION_LIMIT - nextGenerationsUsed),
     });
 
   } catch (err) {
