@@ -182,7 +182,16 @@ useEffect(() => {
     const data = await res.json();
 
       if (!res.ok) {
-        return alert(data?.error ?? "Evaluation failed");
+        const message =
+          data?.error === "Evaluation could not be saved"
+            ? "Evaluation could not be saved. Please try again before generating a press release."
+            : data?.error ?? "Evaluation failed";
+
+        return alert(message);
+      }
+
+      if (!data.id) {
+        return alert("Evaluation could not be saved. Please try again before generating a press release.");
       }
 
       setEvalData(data);

@@ -363,10 +363,16 @@ const { data: insertedEvaluation, error: insertError } = await supabase
 
 if (insertError) {  // ← NEW
   console.error("Supabase insert error:", insertError);
+  return res.status(500).json({ error: "Evaluation could not be saved" });
+}
+
+if (!insertedEvaluation?.id) {
+  console.error("Supabase insert did not return an evaluation id");
+  return res.status(500).json({ error: "Evaluation could not be saved" });
 }
 
 return res.status(200).json({
-  id: insertedEvaluation?.id ?? null,
+  id: insertedEvaluation.id,
   verdict,
   risk_score,
   risk_breakdown,
