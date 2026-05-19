@@ -10,6 +10,12 @@ const supabase = createClient(
 );
 
 const FREE_GENERATION_LIMIT = 5;
+const MAX_PROMPT_LENGTH = 6000;
+const MAX_EVALUATION_ID_LENGTH = 100;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 5;
+
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
 async function getVerifiedUser(req) {
   const authHeader = Array.isArray(req.headers.authorization)
@@ -30,6 +36,42 @@ async function getVerifiedUser(req) {
   return data.user;
 }
 
+function cleanRequiredString(value: any, fieldName: string, maxLength: number) {
+  if (typeof value !== "string") {
+    return { error: `${fieldName} is required` };
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return { error: `${fieldName} cannot be empty` };
+  }
+
+  if (trimmed.length > maxLength) {
+    return { error: `${fieldName} must be ${maxLength} characters or fewer` };
+  }
+
+  return { value: trimmed };
+}
+
+function checkRateLimit(userId: string) {
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(userId);
+
+  if (!bucket || bucket.resetAt <= now) {
+    rateLimitBuckets.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return null;
+  }
+
+  if (bucket.count >= RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterSeconds = Math.ceil((bucket.resetAt - now) / 1000);
+    return `Too many generation requests. Try again in ${retryAfterSeconds} seconds.`;
+  }
+
+  bucket.count += 1;
+  return null;
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== 'POST') {
@@ -39,8 +81,26 @@ export default async function handler(req, res) {
     const { prompt, evaluation_id } = req.body;
     const verifiedUser = await getVerifiedUser(req);
 
-    if (!prompt || typeof prompt !== 'string') {
-      return res.status(400).json({ error: 'Missing prompt' });
+    const cleanPrompt = cleanRequiredString(prompt, "prompt", MAX_PROMPT_LENGTH);
+
+    if (cleanPrompt.error) {
+      return res.status(400).json({ error: cleanPrompt.error });
+    }
+
+    const cleanEvaluationId = cleanRequiredString(
+      evaluation_id,
+      "evaluation_id",
+      MAX_EVALUATION_ID_LENGTH
+    );
+
+    if (cleanEvaluationId.error) {
+      return res.status(400).json({ error: cleanEvaluationId.error });
+    }
+
+    const rateLimitError = checkRateLimit(verifiedUser.id);
+
+    if (rateLimitError) {
+      return res.status(429).json({ error: rateLimitError });
     }
 
     const { count: generationsUsed, error: usageError } = await supabase
@@ -61,12 +121,8 @@ export default async function handler(req, res) {
       });
     }
 
-    let evaluationId = typeof evaluation_id === "string" ? evaluation_id : null;
+    let evaluationId = cleanEvaluationId.value;
     let evaluationVerdict: "GO" | "CONDITIONAL" | "NO-GO" | null = null;
-
-    if (!evaluationId) {
-      return res.status(400).json({ error: "Missing evaluation_id" });
-    }
 
     const { data: evaluation, error: evaluationError } = await supabase
       .from("evaluations")
@@ -100,7 +156,7 @@ Output format:
 6) MEDIA CONTACT (Name, email, phone as [TBD] if unknown)
 
 Brief:
-${prompt}`;
+${cleanPrompt.value}`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -118,7 +174,7 @@ ${prompt}`;
       .insert({
         evaluation_id: evaluationId,
         user_id: verifiedUser.id,
-        prompt,
+        prompt: cleanPrompt.value,
         output: text,
         model: "gpt-4o-mini",
       })

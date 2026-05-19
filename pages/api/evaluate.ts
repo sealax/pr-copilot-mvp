@@ -9,6 +9,13 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const MAX_ANNOUNCEMENT_LENGTH = 6000;
+const MAX_CONTEXT_FIELD_LENGTH = 1000;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 10;
+
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
 async function getVerifiedUser(req) {
   const authHeader = Array.isArray(req.headers.authorization)
     ? req.headers.authorization[0]
@@ -28,6 +35,59 @@ async function getVerifiedUser(req) {
   return data.user;
 }
 
+function cleanRequiredString(value: any, fieldName: string, maxLength: number) {
+  if (typeof value !== "string") {
+    return { error: `${fieldName} is required` };
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return { error: `${fieldName} cannot be empty` };
+  }
+
+  if (trimmed.length > maxLength) {
+    return { error: `${fieldName} must be ${maxLength} characters or fewer` };
+  }
+
+  return { value: trimmed };
+}
+
+function cleanOptionalString(value: any, fallback: string, fieldName: string, maxLength: number) {
+  if (value === undefined || value === null) return { value: fallback };
+
+  if (typeof value !== "string") {
+    return { error: `${fieldName} must be a string` };
+  }
+
+  const trimmed = value.trim();
+  const safeValue = trimmed || fallback;
+
+  if (safeValue.length > maxLength) {
+    return { error: `${fieldName} must be ${maxLength} characters or fewer` };
+  }
+
+  return { value: safeValue };
+}
+
+function checkRateLimit(userId: string) {
+  const now = Date.now();
+  const bucket = rateLimitBuckets.get(userId);
+
+  if (!bucket || bucket.resetAt <= now) {
+    rateLimitBuckets.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return null;
+  }
+
+  if (bucket.count >= RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterSeconds = Math.ceil((bucket.resetAt - now) / 1000);
+    return `Too many evaluation requests. Try again in ${retryAfterSeconds} seconds.`;
+  }
+
+  bucket.count += 1;
+  return null;
+}
+
 export default async function handler(req, res) {
   try {
     if (req.method !== "POST") {
@@ -45,18 +105,49 @@ export default async function handler(req, res) {
     } = req.body ?? {};
     const verifiedUser = await getVerifiedUser(req);
 
-    if (!announcement || typeof announcement !== "string") {
-      return res.status(400).json({ error: "Missing announcement" });
+    const cleanAnnouncement = cleanRequiredString(
+      announcement,
+      "announcement",
+      MAX_ANNOUNCEMENT_LENGTH
+    );
+
+    if (cleanAnnouncement.error) {
+      return res.status(400).json({ error: cleanAnnouncement.error });
+    }
+
+    const cleanStage = cleanOptionalString(stage, "[TBD]", "stage", MAX_CONTEXT_FIELD_LENGTH);
+    const cleanMarket = cleanOptionalString(market, "[TBD]", "market", MAX_CONTEXT_FIELD_LENGTH);
+    const cleanGeo = cleanOptionalString(geo, "[TBD]", "geo", MAX_CONTEXT_FIELD_LENGTH);
+    const cleanFunding = cleanOptionalString(funding, "[TBD]", "funding", MAX_CONTEXT_FIELD_LENGTH);
+    const cleanBackers = cleanOptionalString(backers, "[TBD]", "backers", MAX_CONTEXT_FIELD_LENGTH);
+    const cleanPartners = cleanOptionalString(partners, "[TBD]", "partners", MAX_CONTEXT_FIELD_LENGTH);
+
+    const contextError =
+      cleanStage.error ||
+      cleanMarket.error ||
+      cleanGeo.error ||
+      cleanFunding.error ||
+      cleanBackers.error ||
+      cleanPartners.error;
+
+    if (contextError) {
+      return res.status(400).json({ error: contextError });
+    }
+
+    const rateLimitError = checkRateLimit(verifiedUser.id);
+
+    if (rateLimitError) {
+      return res.status(429).json({ error: rateLimitError });
     }
 
     // Optional fields: keep them safe and predictable
     const ctx = {
-      stage: typeof stage === "string" ? stage : "[TBD]",
-      market: typeof market === "string" ? market : "[TBD]",
-      geo: typeof geo === "string" ? geo : "[TBD]",
-      funding: typeof funding === "string" ? funding : "[TBD]",
-      backers: typeof backers === "string" ? backers : "[TBD]",
-      partners: typeof partners === "string" ? partners : "[TBD]",
+      stage: cleanStage.value,
+      market: cleanMarket.value,
+      geo: cleanGeo.value,
+      funding: cleanFunding.value,
+      backers: cleanBackers.value,
+      partners: cleanPartners.value,
     };
 
     const system = `You are a senior PR advisor whose primary responsibility is to prevent founders from damaging their credibility through premature or weak media outreach.
@@ -183,7 +274,7 @@ Rules:
 - Notable partners or customers (if any): ${ctx.partners}
 
 Proposed announcement:
-${announcement}
+${cleanAnnouncement.value}
 
 Evaluate this announcement for PR readiness and risk.
 
@@ -209,7 +300,7 @@ try {
   parsed = JSON.parse(text);
 } catch (e) {
   console.error("Model did not return valid JSON:", text);
-  return res.status(502).json({ error: "Model returned invalid JSON", raw: text });
+  return res.status(502).json({ error: "Model returned invalid JSON" });
 }
 
 // Validate + clamp
@@ -250,7 +341,7 @@ const { data: insertedEvaluation, error: insertError } = await supabase
   .from("evaluations")
   .insert({
     user_id: verifiedUser.id,
-    announcement,
+    announcement: cleanAnnouncement.value,
     market: ctx.market,
     partners: ctx.partners,
     funding: ctx.funding,
@@ -284,8 +375,7 @@ return res.status(200).json({
   recommendation: {
     summary: recommendation_summary,
     next_actions,
-  },
-  raw: parsed, // keep for debugging for now; we can remove later
+  }
 });
 
 
