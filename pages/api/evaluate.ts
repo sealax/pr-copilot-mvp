@@ -12,6 +12,23 @@ const supabase = createClient(
 
 const tokenSecret = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.OPENAI_API_KEY ?? "";
 
+async function getVerifiedUser(req) {
+  const authHeader = Array.isArray(req.headers.authorization)
+    ? req.headers.authorization[0]
+    : req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) return null;
+
+  const accessToken = authHeader.slice("Bearer ".length);
+  const { data, error } = await supabase.auth.getUser(accessToken);
+
+  if (error || !data?.user) {
+    throw new Error("Invalid Supabase access token");
+  }
+
+  return data.user;
+}
+
 function signEvaluationToken(announcement: string, verdict: string) {
   const payload = Buffer.from(
     JSON.stringify({
@@ -38,8 +55,8 @@ export default async function handler(req, res) {
       funding,
       backers,
       partners,
-      user_id,
     } = req.body ?? {};
+    const verifiedUser = await getVerifiedUser(req);
 
     if (!announcement || typeof announcement !== "string") {
       return res.status(400).json({ error: "Missing announcement" });
@@ -265,7 +282,7 @@ const next_actions = Array.isArray(parsed?.recommendation?.next_actions)
 const { data: insertedEvaluation, error: insertError } = await supabase
   .from("evaluations")
   .insert({
-    user_id: user_id ?? null,
+    user_id: verifiedUser?.id ?? null,
     announcement,
     market: ctx.market,
     partners: ctx.partners,
@@ -307,6 +324,10 @@ return res.status(200).json({
 
 
   } catch (err) {
+    if (err instanceof Error && err.message === "Invalid Supabase access token") {
+      return res.status(401).json({ error: "Invalid Supabase access token" });
+    }
+
     console.error("Evaluation API error:", err);
     return res.status(500).json({ error: "Something went wrong on the server." });
   }
