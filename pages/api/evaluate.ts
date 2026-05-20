@@ -355,7 +355,6 @@ const { data: insertedEvaluation, error: insertError } = await supabase
         summary: recommendation_summary,
         next_actions,
       },
-      raw: parsed,
     },
   })
   .select()        // ← NEW

@@ -453,7 +453,11 @@ useEffect(() => {
       key={item.id}
 
       onClick={async () => {
-        setEvalData(item.evaluation_json?.raw ?? null);
+        const savedEvaluation = item.evaluation_json?.risk_breakdown
+          ? item.evaluation_json
+          : item.evaluation_json?.raw ?? null;
+
+        setEvalData(savedEvaluation);
         setVerdict(item.verdict ?? "");
         setRiskScore(item.risk_score ?? null);
         setPrompt(item.announcement ?? "");
