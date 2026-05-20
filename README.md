@@ -110,7 +110,7 @@ Current frontend includes:
 - journalist reaction and recommendation display
 - primary failure modes and next actions
 - generation gated by evaluation result
-- GitHub login via Supabase OAuth
+- GitHub and Google login via Supabase OAuth
 - logout
 - recent evaluation history
 - saved generation loading for recent evaluations
@@ -284,6 +284,15 @@ Check:
 - anon key
 - provider settings
 - redirect URLs
+
+### Google OAuth setup
+
+The app supports GitHub and Google login through Supabase OAuth. To enable Google login:
+
+- Create OAuth credentials in Google Cloud Console.
+- Add the Supabase callback URL from **Supabase Auth > Providers > Google** to the Google OAuth redirect URIs.
+- Enable the Google provider in Supabase and add the Google client ID and client secret.
+- Confirm local and production site URLs are allowed in Supabase Auth URL configuration.
 
 ### `.env.local` changes not taking effect
 

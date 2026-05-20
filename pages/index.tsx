@@ -54,13 +54,13 @@ useEffect(() => {
   fetchHistory();
 }, [user]);
 
-const login = async () => {
+const login = async (provider: "github" | "google") => {
   if (!supabase) {
     alert("Supabase is not configured");
     return;
   }
   const { error } = await supabase.auth.signInWithOAuth({
-    provider: "github",
+    provider,
     options: {
       redirectTo: window.location.origin,
     },
@@ -288,7 +288,14 @@ useEffect(() => {
           ) : (
             <>
               <span className="account-label">Authentication required</span>
-              <button className="button primary small" onClick={login}>Sign in with GitHub</button>
+              <div className="login-actions">
+                <button className="button primary small" onClick={() => login("github")}>
+                  Continue with GitHub
+                </button>
+                <button className="button secondary small" onClick={() => login("google")}>
+                  Continue with Google
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -583,6 +590,12 @@ useEffect(() => {
           display: grid;
           gap: 8px;
           justify-items: start;
+        }
+
+        .login-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
         }
 
         .account-label,
