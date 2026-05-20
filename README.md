@@ -69,6 +69,9 @@ Current behaviour:
 - sends announcement data to OpenAI
 - expects structured JSON output
 - validates and clamps scores server-side
+- verifies the Supabase user from the bearer token
+- saves the normalized evaluation to Supabase
+- does not persist raw model output for new evaluations
 - returns structured evaluation results
 
 #### `/api/generate`
@@ -77,9 +80,22 @@ Handles press release generation.
 
 Current behaviour:
 
-- accepts structured announcement input
+- verifies the Supabase user from the bearer token
+- requires a saved evaluation ID owned by the verified user
 - generates press release draft
 - blocks generation when evaluation verdict is `NO-GO`
+- enforces the free generation limit from database-backed usage
+- saves generations to Supabase
+
+#### `/api/usage`
+
+Returns database-backed usage state for the verified user.
+
+Current behaviour:
+
+- verifies the Supabase user from the bearer token
+- counts saved rows in the `generations` table
+- returns used, remaining, and limit values
 
 ---
 
@@ -96,6 +112,10 @@ Current frontend includes:
 - risk breakdown display
 - collapsible evaluation details
 - generation gated by evaluation result
+- GitHub login via Supabase OAuth
+- logout
+- recent evaluation history
+- saved generation loading for recent evaluations
 
 ---
 
@@ -105,7 +125,7 @@ Current frontend includes:
 - React
 - TypeScript
 - OpenAI API
-- Supabase (auth + planned persistence)
+- Supabase auth and persistence
 - local development via `npm run dev`
 
 ---
@@ -233,12 +253,14 @@ This is still an MVP.
 
 Current limitations include:
 
-- no persistent evaluation history yet
-- no persistent generation history yet
-- no full production auth flow yet
-- no server-side usage limit enforcement yet
+- UI is still basic and mostly inline-styled
+- history only fetches the latest 5 evaluations
+- no schema validation library yet
+- no lint script or automated tests yet
+- no documented Supabase migrations or RLS policy setup in the repo yet
 - no announcement-type prompt system yet
 - limited product polish and dashboard sophistication
+- no Stripe/payment logic yet
 
 ---
 
@@ -280,10 +302,8 @@ npm run dev
 
 ### Product
 
-- persist evaluation history in Supabase
-- persist generation history in Supabase
-- add real auth
-- add server-side usage limits
+- document Supabase table schema and RLS policies
+- tighten typed API contracts and evaluation schema definitions
 - build prompt systems by announcement type
 - refine positioning and onboarding copy
 
@@ -291,9 +311,16 @@ npm run dev
 
 - improve dashboard design
 - improve output presentation
-- add saved history view
+- improve saved history view
 - add export / copy workflow
 - improve premium feel and trust signals
+
+### Engineering
+
+- add a lint script and minimal automated tests
+- remove dead frontend parsing helpers left over from text-based evaluation output
+- handle expected empty generation-history states without noisy console errors
+- keep `npm run build` passing before deploy
 
 ### Business
 
@@ -326,4 +353,4 @@ It exists to:
 
 - test the core product logic
 - validate the evaluate-then-generate workflow
-- prove the concept before persistence, billing, and production polish are added
+- prove the concept before billing and production polish are added
