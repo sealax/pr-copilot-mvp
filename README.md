@@ -40,8 +40,6 @@ The user submits a structured announcement and PR Copilot evaluates it.
 Current evaluation output includes:
 
 - verdict: `GO`, `CONDITIONAL`, or `NO-GO`
-- overall risk score (`0–100`)
-- risk breakdown across five dimensions
 - primary failure modes
 - journalist reaction simulation
 - recommendation and next actions
@@ -109,8 +107,8 @@ Current frontend includes:
   - funding
   - partners
 - verdict badge (`green / yellow / red`)
-- risk breakdown display
-- collapsible evaluation details
+- journalist reaction and recommendation display
+- primary failure modes and next actions
 - generation gated by evaluation result
 - GitHub login via Supabase OAuth
 - logout
@@ -196,17 +194,17 @@ If you changed `.env.local`, stop and restart the dev server.
 3. Run **PR Readiness Evaluation**
 4. Review:
    - verdict
-   - overall score
-   - risk breakdown
    - primary failure modes
    - simulated journalist reaction
    - recommendation / next actions
+   - saved recent evaluation history
 
 ### Generation flow
 
 1. Complete evaluation first
 2. If verdict is not `NO-GO`, click **Generate**
 3. Review the generated press release draft
+4. Confirm the saved draft can be reloaded from recent evaluations
 
 ---
 
@@ -319,7 +317,6 @@ npm run dev
 
 - add a lint script and minimal automated tests
 - remove dead frontend parsing helpers left over from text-based evaluation output
-- handle expected empty generation-history states without noisy console errors
 - keep `npm run build` passing before deploy
 
 ### Business

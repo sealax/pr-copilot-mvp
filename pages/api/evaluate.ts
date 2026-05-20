@@ -357,10 +357,10 @@ const { data: insertedEvaluation, error: insertError } = await supabase
       },
     },
   })
-  .select()        // ← NEW
-  .single();       // ← NEW
+  .select()
+  .single();
 
-if (insertError) {  // ← NEW
+if (insertError) {
   console.error("Supabase insert error:", insertError);
   return res.status(500).json({ error: "Evaluation could not be saved" });
 }

@@ -59,7 +59,7 @@ const login = async () => {
     alert("Supabase is not configured");
     return;
   }
-  const { data, error } = await supabase.auth.signInWithOAuth({
+  const { error } = await supabase.auth.signInWithOAuth({
     provider: "github",
     options: {
       redirectTo: window.location.origin,
@@ -198,7 +198,7 @@ useEffect(() => {
       return alert("Evaluation was not saved, so generation cannot run. Please run the readiness check again.");
     }
     if (remainingGenerations !== null && remainingGenerations <= 0) {
-      return alert("You’ve used all 5 free generations");
+      return alert(`You’ve used all ${generationLimit} free generations`);
     }
 
   setIsGenerating(true);
@@ -211,7 +211,6 @@ useEffect(() => {
       headers,
       body: JSON.stringify({
         prompt,
-        email: user?.email ?? null,
         evaluation_id: evalData?.id ?? null,
   }),
     });
