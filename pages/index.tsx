@@ -25,9 +25,6 @@ export default function Home() {
   const [funding, setFunding] = useState("$3M seed");
   const [partners, setPartners] = useState("AcmePay (regulated UK fintech)");
 
-  const [riskScore, setRiskScore] = useState<number | null>(null);
-  const [showFullEvaluation, setShowFullEvaluation] = useState(false);
-
   const [evalData, setEvalData] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
 
@@ -92,7 +89,6 @@ const logout = async () => {
   setHistory([]);
   setEvalData(null);
   setVerdict("");
-  setRiskScore(null);
   setPrompt("");
   setOutput("");
   setRemainingGenerations(null);
@@ -181,9 +177,7 @@ useEffect(() => {
 
       setEvalData(data);
       setVerdict(data.verdict ?? "");
-      setRiskScore(typeof data.risk_score === "number" ? data.risk_score : null);
 
-      setShowFullEvaluation(false);
       fetchHistory().catch((e) => console.error("History refresh failed:", e));
 
   } catch (e) {
@@ -409,28 +403,6 @@ useEffect(() => {
                     )}
                 </div>
 
-                <button className="button tertiary" onClick={() => setShowFullEvaluation((v) => !v)}>
-                  {showFullEvaluation ? "Hide risk details" : "Show risk details"}
-                </button>
-
-                {showFullEvaluation && (
-                  <div className="risk-details">
-                    <div>
-                      <span>Overall risk</span>
-                      <strong>{riskScore === null ? "Not available" : `${riskScore}/100`}</strong>
-                    </div>
-
-                    {evalData?.risk_breakdown && (
-                      <ul>
-                        <li><span>External validation</span><strong>{evalData.risk_breakdown.external_validation} / 30</strong></li>
-                        <li><span>Beneficiary clarity</span><strong>{evalData.risk_breakdown.beneficiary_clarity} / 20</strong></li>
-                        <li><span>Explainability</span><strong>{evalData.risk_breakdown.explainability} / 20</strong></li>
-                        <li><span>Third-party support</span><strong>{evalData.risk_breakdown.third_party_support} / 15</strong></li>
-                        <li><span>Impact vs activity</span><strong>{evalData.risk_breakdown.impact_vs_activity} / 15</strong></li>
-                      </ul>
-                    )}
-                  </div>
-                )}
               </>
             )}
           </section>
@@ -506,7 +478,6 @@ useEffect(() => {
 
                   setEvalData(savedEvaluation ? { id: item.id, ...savedEvaluation } : { id: item.id });
                   setVerdict(item.verdict ?? "");
-                  setRiskScore(item.risk_score ?? null);
                   setPrompt(item.announcement ?? "");
                   setMarket(item.market ?? "");
                   setPartners(item.partners ?? "");
@@ -849,37 +820,6 @@ useEffect(() => {
         .clean-list li,
         .action-list li {
           margin-bottom: 9px;
-        }
-
-        .risk-details {
-          margin-top: 14px;
-          border-top: 1px solid #e3e0d8;
-          padding-top: 16px;
-          display: grid;
-          gap: 14px;
-        }
-
-        .risk-details > div {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          color: #57534a;
-        }
-
-        .risk-details ul {
-          list-style: none;
-          margin: 0;
-          padding: 0;
-          display: grid;
-          gap: 8px;
-        }
-
-        .risk-details li {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          color: #57534a;
-          font-size: 14px;
         }
 
         .output-card {
