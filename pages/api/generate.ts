@@ -186,11 +186,16 @@ ${cleanPrompt.value}`;
       return res.status(500).json({ error: "Could not save generation" });
     }
 
+    if (!data?.id) {
+      console.error("Supabase generation insert did not return an id");
+      return res.status(500).json({ error: "Could not save generation" });
+    }
+
     const nextGenerationsUsed = generationsUsed + 1;
 
     return res.status(200).json({
       response: text,
-      generation_id: data?.id ?? null,
+      generation_id: data.id,
       generations_used: nextGenerationsUsed,
       remaining_generations: Math.max(0, FREE_GENERATION_LIMIT - nextGenerationsUsed),
     });

@@ -19,6 +19,7 @@ export default function Home() {
   const [verdict, setVerdict] = useState<"GO" | "CONDITIONAL" | "NO-GO" | "">("");
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [copiedOutput, setCopiedOutput] = useState(false);
 
   const [market, setMarket] = useState("Fintech compliance");
   const [funding, setFunding] = useState("$3M seed");
@@ -35,23 +36,23 @@ useEffect(() => {
   supabase.auth.getUser().then(({ data }) => setUser(data?.user ?? null));
 }, []);
 
+const fetchHistory = async () => {
+  if (!supabase || !user) return;
+
+    const headers = await getApiHeaders();
+    const res = await fetch("/api/history", { headers });
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("History API error:", data);
+      return;
+    }
+
+    setHistory(Array.isArray(data.history) ? data.history : []);
+  };
+
 useEffect(() => {
   if (!user) return;
-
-  const fetchHistory = async () => {
-    const { data, error } = await supabase
-      .from("evaluations")
-      .select("*, generations(id)")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(5);
-
-    if (error) {
-      console.error("Error fetching history:", error);
-    } else {
-      setHistory(data || []);
-    }
-  };
 
   fetchHistory();
 }, [user]);
@@ -67,8 +68,10 @@ const login = async () => {
       redirectTo: window.location.origin,
     },
   });
-  console.log("LOGIN DATA:", data);
-  console.log("LOGIN ERROR:", error);
+
+  if (error) {
+    console.error("LOGIN ERROR:", error);
+  }
 };
 
 const logout = async () => {
@@ -181,8 +184,7 @@ useEffect(() => {
       setRiskScore(typeof data.risk_score === "number" ? data.risk_score : null);
 
       setShowFullEvaluation(false);
-
-
+      fetchHistory().catch((e) => console.error("History refresh failed:", e));
 
   } catch (e) {
     console.error(e);
@@ -190,11 +192,9 @@ useEffect(() => {
   } finally {
     setIsEvaluating(false);
   }
-};
+  };
 
   const handleSubmit = async () => {
-    console.log("SUBMIT clicked");
-
     if (!user) return alert("Sign in to generate a press release");
     if (!evalData) return alert("Run PR Readiness Check first");
     if (!(verdict === "GO" || verdict === "CONDITIONAL")) {
@@ -223,7 +223,6 @@ useEffect(() => {
     });
 
     const data = await res.json();
-    console.log("API RESPONSE:", data);
 
     if (!res.ok) {
       return alert(data?.error ?? "Generation failed");
@@ -237,6 +236,7 @@ useEffect(() => {
     if (typeof data.remaining_generations === "number") {
       setRemainingGenerations(data.remaining_generations);
     }
+    fetchHistory().catch((e) => console.error("History refresh failed:", e));
 
   } catch (e) {
     console.error(e);
@@ -246,233 +246,775 @@ useEffect(() => {
   }
   };
 
+  const copyOutput = async () => {
+    if (!output) return;
 
+    try {
+      await navigator.clipboard.writeText(output);
+      setCopiedOutput(true);
+      window.setTimeout(() => setCopiedOutput(false), 1800);
+    } catch (e) {
+      console.error("Copy failed:", e);
+      alert("Could not copy the draft");
+    }
+  };
+
+  const verdictLabel = verdict || "Not evaluated";
+  const verdictClass =
+    verdict === "GO" ? "go" : verdict === "CONDITIONAL" ? "conditional" : verdict === "NO-GO" ? "nogo" : "neutral";
+  const canGenerate = Boolean(user && evalData?.id && (verdict === "GO" || verdict === "CONDITIONAL"));
+  const generationStatus = !user
+    ? "Sign in to generate after a readiness check."
+    : !evalData
+    ? "Run and save a readiness evaluation before generating copy."
+    : verdict === "NO-GO"
+    ? "Generation is blocked because this evaluation is NO-GO."
+    : verdict === "GO" || verdict === "CONDITIONAL"
+    ? "Generation is available for this saved evaluation."
+    : "Run a readiness evaluation before generating copy.";
 
 
   return (
-    <main style={{ padding: 40 }}>
-      <h1>PR Copilot</h1>
-      {!user && <button onClick={login}>Sign in with GitHub</button>}
-      {user ? (
-        <p>
-          Welcome {user.email} <button onClick={logout}>Log out</button>
-        </p>
-      ) : (
-        <p>(Not logged in — demo mode)</p>
-      )}
+    <main className="app-shell">
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">PR readiness operator</p>
+          <h1>PR Copilot</h1>
+          <p className="tagline">
+            Evaluate whether an announcement deserves media attention before drafting the release.
+          </p>
+        </div>
 
-
-
-
-      <div style={{ marginBottom: 12 }}>
-        <label>Market&nbsp;</label>
-        <input
-        value={market}
-        onChange={(e) => setMarket(e.target.value)}
-        style={{ width: 420 }}
-        />
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <label>Partners/Customers&nbsp;</label>
-        <input
-        value={partners}
-        onChange={(e) => setPartners(e.target.value)}
-        style={{ width: 420 }}
-        />
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <label>Funding&nbsp;</label>
-        <input
-        value={funding}
-        onChange={(e) => setFunding(e.target.value)}
-        style={{ width: 420 }}
-        />
-      </div>
-
-
-
-      <textarea rows={6} value={prompt} onChange={e => setPrompt(e.target.value)} />
-      <button onClick={handleEvaluate} disabled={isEvaluating || !user}>
-  {isEvaluating ? "Evaluating..." : "Run PR Readiness Check"}
-</button>
-
-<div style={{ marginTop: 12 }}>
-  <strong>Verdict:</strong>{" "}
-  {verdict ? (
-    (() => {
-      const v = verdict.toUpperCase();
-
-      const isGo = v === "GO";
-      const isConditional = v === "CONDITIONAL";
-      const isNoGo = v === "NO-GO" || v === "NO GO";
-
-      const bg = isGo
-        ? "#d4edda"
-        : isConditional
-        ? "#fff3cd"
-        : "#f8d7da";
-
-      const color = isGo
-        ? "#155724"
-        : isConditional
-        ? "#856404"
-        : "#721c24";
-
-      return (
-        <span
-          style={{
-            padding: "4px 10px",
-            borderRadius: 6,
-            fontWeight: 600,
-            backgroundColor: bg,
-            color: color,
-          }}
-        >
-          {v}
-        </span>
-      );
-    })()
-  ) : (
-    "(not evaluated yet)"
-  )}
-</div>
-
-<div style={{ marginTop: 6 }}>
-  <strong>Risk score:</strong> {riskScore === null ? "(n/a)" : `${riskScore}/100`}
-</div>
-
-{evalData?.risk_breakdown && (
-  <div style={{ marginTop: 8 }}>
-    <strong>Risk breakdown</strong>
-    <ul style={{ marginTop: 6 }}>
-      <li>External validation: {evalData.risk_breakdown.external_validation} / 30</li>
-      <li>Beneficiary clarity: {evalData.risk_breakdown.beneficiary_clarity} / 20</li>
-      <li>Explainability: {evalData.risk_breakdown.explainability} / 20</li>
-      <li>Third-party support: {evalData.risk_breakdown.third_party_support} / 15</li>
-      <li>Impact vs activity: {evalData.risk_breakdown.impact_vs_activity} / 15</li>
-    </ul>
-  </div>
-)}
-
-{evalData && (
-  <div style={{ marginTop: 12 }}>
-    <button onClick={() => setShowFullEvaluation((v) => !v)}>
-      {showFullEvaluation ? "Hide details" : "Show details"}
-    </button>
-
-    {showFullEvaluation && (
-      <div style={{ marginTop: 12 }}>
-        {Array.isArray(evalData.primary_failure_modes) &&
-          evalData.primary_failure_modes.length > 0 && (
+        <div className="account-panel">
+          {user ? (
             <>
-              <strong>Primary failure modes</strong>
-              <ul>
-                {evalData.primary_failure_modes.slice(0, 6).map((x: string, i: number) => (
-                  <li key={i}>{x}</li>
-                ))}
-              </ul>
+              <span className="account-label">Signed in</span>
+              <strong>{user.email}</strong>
+              <button className="button secondary small" onClick={logout}>Log out</button>
+            </>
+          ) : (
+            <>
+              <span className="account-label">Authentication required</span>
+              <button className="button primary small" onClick={login}>Sign in with GitHub</button>
             </>
           )}
+        </div>
+      </header>
 
-        {evalData.journalist_reaction && (
-          <>
-            <strong>Journalist reaction</strong>
-            <p style={{ marginTop: 6 }}>{evalData.journalist_reaction}</p>
-          </>
-        )}
+      <section className="workbench">
+        <div className="primary-column">
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Step 1</p>
+                <h2>Readiness assessment</h2>
+              </div>
+              <span className="subtle-status">{user ? "Ready to evaluate" : "Sign in required"}</span>
+            </div>
 
-        {evalData.recommendation?.summary && (
-          <>
-            <strong>Recommendation</strong>
-            <p style={{ marginTop: 6 }}>{evalData.recommendation.summary}</p>
-          </>
-        )}
+            <p className="section-copy">
+              Describe the announcement as you would brief a PR lead. Include the market, proof points,
+              named partners, measurable outcomes, and any constraints a journalist would question.
+            </p>
 
-        {Array.isArray(evalData.recommendation?.next_actions) &&
-          evalData.recommendation.next_actions.length > 0 && (
-            <>
-              <strong>Next actions</strong>
-              <ol>
-                {evalData.recommendation.next_actions.slice(0, 3).map((x: string, i: number) => (
-                  <li key={i}>{x}</li>
-                ))}
-              </ol>
-            </>
+            <div className="field-grid">
+              <label>
+                <span>Market</span>
+                <input value={market} onChange={(e) => setMarket(e.target.value)} />
+              </label>
+
+              <label>
+                <span>Partners / customers</span>
+                <input value={partners} onChange={(e) => setPartners(e.target.value)} />
+              </label>
+
+              <label>
+                <span>Funding</span>
+                <input value={funding} onChange={(e) => setFunding(e.target.value)} />
+              </label>
+            </div>
+
+            <label className="brief-field">
+              <span>Announcement brief</span>
+              <textarea
+                rows={8}
+                value={prompt}
+                onChange={e => setPrompt(e.target.value)}
+                placeholder="Example: We are announcing a named customer pilot with measured results, approved customer quote, target geography, and launch timing..."
+              />
+            </label>
+
+            <div className="action-row">
+              <button className="button primary" onClick={handleEvaluate} disabled={isEvaluating || !user}>
+                {isEvaluating ? "Evaluating..." : "Run PR Readiness Check"}
+              </button>
+              <span className="helper-text">
+                Evaluation must be saved before generation is available.
+              </span>
+            </div>
+          </section>
+
+          <section className={`panel verdict-panel ${verdictClass}`}>
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Step 2</p>
+                <h2>Editorial judgment</h2>
+              </div>
+              <span className={`verdict-badge ${verdictClass}`}>{verdictLabel}</span>
+            </div>
+
+            {!evalData ? (
+              <p className="empty-state">
+                Run a readiness check to see the verdict, journalist reaction, failure modes, and next actions.
+              </p>
+            ) : (
+              <>
+                {evalData.journalist_reaction && (
+                  <div className="judgment-block">
+                    <span>Likely journalist reaction</span>
+                    <p>{evalData.journalist_reaction}</p>
+                  </div>
+                )}
+
+                {evalData.recommendation?.summary && (
+                  <div className="judgment-block">
+                    <span>Recommendation</span>
+                    <p>{evalData.recommendation.summary}</p>
+                  </div>
+                )}
+
+                <div className="result-grid">
+                  {Array.isArray(evalData.primary_failure_modes) &&
+                    evalData.primary_failure_modes.length > 0 && (
+                      <div>
+                        <h3>Primary failure modes</h3>
+                        <ul className="clean-list">
+                          {evalData.primary_failure_modes.slice(0, 6).map((x: string, i: number) => (
+                            <li key={i}>{x}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                  {Array.isArray(evalData.recommendation?.next_actions) &&
+                    evalData.recommendation.next_actions.length > 0 && (
+                      <div>
+                        <h3>Next actions</h3>
+                        <ol className="action-list">
+                          {evalData.recommendation.next_actions.slice(0, 3).map((x: string, i: number) => (
+                            <li key={i}>{x}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                </div>
+
+                <button className="button tertiary" onClick={() => setShowFullEvaluation((v) => !v)}>
+                  {showFullEvaluation ? "Hide risk details" : "Show risk details"}
+                </button>
+
+                {showFullEvaluation && (
+                  <div className="risk-details">
+                    <div>
+                      <span>Overall risk</span>
+                      <strong>{riskScore === null ? "Not available" : `${riskScore}/100`}</strong>
+                    </div>
+
+                    {evalData?.risk_breakdown && (
+                      <ul>
+                        <li><span>External validation</span><strong>{evalData.risk_breakdown.external_validation} / 30</strong></li>
+                        <li><span>Beneficiary clarity</span><strong>{evalData.risk_breakdown.beneficiary_clarity} / 20</strong></li>
+                        <li><span>Explainability</span><strong>{evalData.risk_breakdown.explainability} / 20</strong></li>
+                        <li><span>Third-party support</span><strong>{evalData.risk_breakdown.third_party_support} / 15</strong></li>
+                        <li><span>Impact vs activity</span><strong>{evalData.risk_breakdown.impact_vs_activity} / 15</strong></li>
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+
+          <section className="panel">
+            <div className="section-heading">
+              <div>
+                <p className="eyebrow">Step 3</p>
+                <h2>Draft generation</h2>
+              </div>
+              <span className="subtle-status">
+                {user
+                  ? remainingGenerations === null
+                    ? "Checking usage"
+                    : `${remainingGenerations} of ${generationLimit} free remaining`
+                  : "Sign in to view usage"}
+              </span>
+            </div>
+
+            <p className="section-copy">{generationStatus}</p>
+
+            <div className="action-row">
+              <button
+                className="button primary"
+                onClick={handleSubmit}
+                disabled={isGenerating || !canGenerate}
+              >
+                {isGenerating ? "Generating..." : "Generate Press Release"}
+              </button>
+            </div>
+
+            {output ? (
+              <div className="output-card">
+                <div className="output-header">
+                  <h3>Generated draft</h3>
+                  <button className="button secondary small" onClick={copyOutput}>
+                    {copiedOutput ? "Copied" : "Copy"}
+                  </button>
+                </div>
+                <pre>{output}</pre>
+              </div>
+            ) : (
+              <p className="empty-state compact">
+                Approved or conditional evaluations can produce a draft here.
+              </p>
+            )}
+          </section>
+        </div>
+
+        <aside className="history-panel">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Saved work</p>
+              <h2>Recent evaluations</h2>
+            </div>
+          </div>
+
+          {history.length === 0 && (
+            <p className="empty-state compact">
+              No saved evaluations yet. Completed checks will appear here.
+            </p>
           )}
-      </div>
-    )}
-  </div>
-)}
 
-<button
-  onClick={handleSubmit}
-  disabled={isGenerating || !user || !(verdict === "GO" || verdict === "CONDITIONAL")}
-  style={{ marginTop: 12 }}
->
-  {isGenerating ? "Generating..." : "Generate Press Release"}
-</button>
+          <div className="history-list">
+            {history.map((item) => (
+              <button
+                className="history-item"
+                key={item.id}
+                onClick={async () => {
+                  const savedEvaluation = item.evaluation_json?.risk_breakdown
+                    ? item.evaluation_json
+                    : item.evaluation_json?.raw ?? null;
 
-      <pre>{output}</pre>
+                  setEvalData(savedEvaluation ? { id: item.id, ...savedEvaluation } : { id: item.id });
+                  setVerdict(item.verdict ?? "");
+                  setRiskScore(item.risk_score ?? null);
+                  setPrompt(item.announcement ?? "");
+                  setMarket(item.market ?? "");
+                  setPartners(item.partners ?? "");
+                  setFunding(item.funding ?? "");
 
-      <p>
-        {user
-          ? remainingGenerations === null
-            ? "Checking free generations remaining..."
-            : `${remainingGenerations} of ${generationLimit} free generations remaining`
-          : "Sign in to view free generations remaining"}
-      </p>
+                  setOutput(item.latest_generation?.output ?? "");
+                }}
+              >
+                <span className={`mini-verdict ${item.verdict === "GO" ? "go" : item.verdict === "CONDITIONAL" ? "conditional" : "nogo"}`}>
+                  {item.verdict}
+                </span>
+                <span className="history-title">{item.announcement?.slice(0, 86)}...</span>
+                <span className="history-meta">
+                  {item.generations && item.generations.length > 0 ? "Draft generated" : "Evaluation only"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </aside>
+      </section>
 
-
-<h3>Recent evaluations</h3>
-
-{history.length === 0 && <p>No history yet</p>}
-
-<ul>
-  {history.map((item) => (
-    <li
-      key={item.id}
-
-      onClick={async () => {
-        const savedEvaluation = item.evaluation_json?.risk_breakdown
-          ? item.evaluation_json
-          : item.evaluation_json?.raw ?? null;
-
-        setEvalData(savedEvaluation);
-        setVerdict(item.verdict ?? "");
-        setRiskScore(item.risk_score ?? null);
-        setPrompt(item.announcement ?? "");
-        setMarket(item.market ?? "");
-        setPartners(item.partners ?? "");
-        setFunding(item.funding ?? "");
-
-        const { data, error } = await supabase
-          .from("generations")
-          .select("*")
-          .eq("evaluation_id", item.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
-
-        if (error) {
-          console.error("Error fetching generation:", error);
-          setOutput("");
-        } else {
-          setOutput(data?.output ?? "");
+      <style jsx>{`
+        :global(body) {
+          margin: 0;
+          background: #f5f5f2;
+          color: #171717;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
-      }}
 
-      style={{ cursor: "pointer", marginBottom: 8 }}
-    >
-      <strong>{item.verdict}</strong>
-      {" "}
-      {item.generations && item.generations.length > 0 ? "• generated" : "• no generation"}
-      {" — "}
-      {item.announcement?.slice(0, 60)}...
-    </li>
-  ))}
-</ul>
+        :global(*) {
+          box-sizing: border-box;
+        }
+
+        .app-shell {
+          min-height: 100vh;
+          padding: 32px;
+        }
+
+        .topbar {
+          max-width: 1180px;
+          margin: 0 auto 28px;
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 24px;
+        }
+
+        .eyebrow {
+          margin: 0 0 8px;
+          color: #76736b;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0;
+          text-transform: uppercase;
+        }
+
+        h1,
+        h2,
+        h3,
+        p {
+          letter-spacing: 0;
+        }
+
+        h1 {
+          margin: 0;
+          font-size: clamp(34px, 5vw, 56px);
+          line-height: 1;
+          font-weight: 760;
+        }
+
+        h2 {
+          margin: 0;
+          font-size: 22px;
+          line-height: 1.2;
+        }
+
+        h3 {
+          margin: 0 0 12px;
+          font-size: 14px;
+          line-height: 1.35;
+          color: #34332f;
+        }
+
+        .tagline {
+          max-width: 640px;
+          margin: 14px 0 0;
+          color: #56534c;
+          font-size: 18px;
+          line-height: 1.5;
+        }
+
+        .account-panel,
+        .panel,
+        .history-panel {
+          border: 1px solid #dedbd2;
+          background: rgba(255, 255, 255, 0.86);
+          box-shadow: 0 18px 50px rgba(35, 34, 30, 0.08);
+        }
+
+        .account-panel {
+          min-width: 250px;
+          padding: 16px;
+          border-radius: 8px;
+          display: grid;
+          gap: 8px;
+          justify-items: start;
+        }
+
+        .account-label,
+        .subtle-status,
+        .helper-text,
+        .history-meta {
+          color: #77736a;
+          font-size: 13px;
+          line-height: 1.4;
+        }
+
+        .workbench {
+          max-width: 1180px;
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) 340px;
+          gap: 22px;
+          align-items: start;
+        }
+
+        .primary-column {
+          display: grid;
+          gap: 22px;
+        }
+
+        .panel,
+        .history-panel {
+          border-radius: 8px;
+          padding: 24px;
+        }
+
+        .section-heading {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 18px;
+        }
+
+        .section-copy {
+          margin: -4px 0 22px;
+          color: #57534a;
+          font-size: 15px;
+          line-height: 1.65;
+        }
+
+        .field-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 14px;
+          margin-bottom: 16px;
+        }
+
+        label {
+          display: grid;
+          gap: 8px;
+          color: #34332f;
+          font-size: 13px;
+          font-weight: 650;
+        }
+
+        input,
+        textarea {
+          width: 100%;
+          border: 1px solid #d7d3c8;
+          border-radius: 8px;
+          background: #fff;
+          color: #171717;
+          font: inherit;
+          font-size: 15px;
+          line-height: 1.5;
+          outline: none;
+          transition: border-color 140ms ease, box-shadow 140ms ease;
+        }
+
+        input {
+          min-height: 44px;
+          padding: 10px 12px;
+        }
+
+        textarea {
+          min-height: 190px;
+          padding: 14px;
+          resize: vertical;
+        }
+
+        input:focus,
+        textarea:focus {
+          border-color: #2f5d50;
+          box-shadow: 0 0 0 3px rgba(47, 93, 80, 0.14);
+        }
+
+        .action-row {
+          margin-top: 18px;
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+
+        .button {
+          border: 1px solid transparent;
+          border-radius: 8px;
+          min-height: 44px;
+          padding: 0 16px;
+          font: inherit;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: transform 140ms ease, background 140ms ease, border-color 140ms ease, opacity 140ms ease;
+        }
+
+        .button:hover:not(:disabled) {
+          transform: translateY(-1px);
+        }
+
+        .button:disabled {
+          cursor: not-allowed;
+          opacity: 0.48;
+        }
+
+        .button.primary {
+          background: #1f2d2a;
+          color: #fff;
+        }
+
+        .button.secondary {
+          background: #fff;
+          border-color: #d7d3c8;
+          color: #24231f;
+        }
+
+        .button.tertiary {
+          min-height: 38px;
+          padding: 0;
+          background: transparent;
+          color: #2f5d50;
+        }
+
+        .button.small {
+          min-height: 36px;
+          padding: 0 12px;
+          font-size: 13px;
+        }
+
+        .verdict-panel {
+          border-top: 4px solid #c9c5bb;
+        }
+
+        .verdict-panel.go {
+          border-top-color: #2f6f58;
+        }
+
+        .verdict-panel.conditional {
+          border-top-color: #9d741b;
+        }
+
+        .verdict-panel.nogo {
+          border-top-color: #9b332d;
+        }
+
+        .verdict-badge,
+        .mini-verdict {
+          border-radius: 999px;
+          padding: 7px 11px;
+          font-size: 12px;
+          font-weight: 800;
+          line-height: 1;
+          white-space: nowrap;
+        }
+
+        .verdict-badge.neutral {
+          background: #eeece6;
+          color: #57534a;
+        }
+
+        .verdict-badge.go,
+        .mini-verdict.go {
+          background: #dceee5;
+          color: #214f3f;
+        }
+
+        .verdict-badge.conditional,
+        .mini-verdict.conditional {
+          background: #f3e7ca;
+          color: #6f4d08;
+        }
+
+        .verdict-badge.nogo,
+        .mini-verdict.nogo {
+          background: #f2d8d5;
+          color: #7b2520;
+        }
+
+        .judgment-block {
+          padding: 18px;
+          border: 1px solid #e1ded5;
+          border-radius: 8px;
+          background: #fbfaf7;
+          margin-bottom: 14px;
+        }
+
+        .judgment-block span {
+          display: block;
+          margin-bottom: 8px;
+          color: #76736b;
+          font-size: 12px;
+          font-weight: 800;
+          text-transform: uppercase;
+        }
+
+        .judgment-block p {
+          margin: 0;
+          color: #24231f;
+          font-size: 17px;
+          line-height: 1.58;
+        }
+
+        .result-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
+          margin-top: 18px;
+        }
+
+        .clean-list,
+        .action-list {
+          margin: 0;
+          padding-left: 20px;
+          color: #44413a;
+          line-height: 1.55;
+        }
+
+        .clean-list li,
+        .action-list li {
+          margin-bottom: 9px;
+        }
+
+        .risk-details {
+          margin-top: 14px;
+          border-top: 1px solid #e3e0d8;
+          padding-top: 16px;
+          display: grid;
+          gap: 14px;
+        }
+
+        .risk-details > div {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          color: #57534a;
+        }
+
+        .risk-details ul {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 8px;
+        }
+
+        .risk-details li {
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          color: #57534a;
+          font-size: 14px;
+        }
+
+        .output-card {
+          margin-top: 20px;
+          border: 1px solid #dedbd2;
+          border-radius: 8px;
+          background: #fff;
+          overflow: hidden;
+        }
+
+        .output-header {
+          padding: 14px 16px;
+          border-bottom: 1px solid #ebe8e0;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .output-header h3 {
+          margin: 0;
+        }
+
+        pre {
+          margin: 0;
+          padding: 18px;
+          white-space: pre-wrap;
+          color: #24231f;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          font-size: 14px;
+          line-height: 1.7;
+        }
+
+        .empty-state {
+          margin: 0;
+          padding: 18px;
+          border: 1px dashed #d8d3c8;
+          border-radius: 8px;
+          background: #fbfaf7;
+          color: #6d685f;
+          line-height: 1.55;
+        }
+
+        .empty-state.compact {
+          padding: 14px;
+          font-size: 14px;
+        }
+
+        .history-panel {
+          position: sticky;
+          top: 22px;
+        }
+
+        .history-list {
+          display: grid;
+          gap: 10px;
+        }
+
+        .history-item {
+          width: 100%;
+          border: 1px solid #e1ded5;
+          border-radius: 8px;
+          padding: 14px;
+          background: #fff;
+          text-align: left;
+          cursor: pointer;
+          display: grid;
+          gap: 10px;
+          transition: border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+        }
+
+        .history-item:hover {
+          border-color: #b9b3a6;
+          transform: translateY(-1px);
+          box-shadow: 0 10px 24px rgba(35, 34, 30, 0.08);
+        }
+
+        .history-title {
+          color: #24231f;
+          font-size: 14px;
+          line-height: 1.45;
+        }
+
+        .mini-verdict {
+          justify-self: start;
+          padding: 6px 9px;
+        }
+
+        @media (max-width: 900px) {
+          .app-shell {
+            padding: 20px;
+          }
+
+          .topbar,
+          .workbench {
+            grid-template-columns: 1fr;
+          }
+
+          .topbar {
+            display: grid;
+          }
+
+          .account-panel {
+            width: 100%;
+          }
+
+          .field-grid,
+          .result-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .history-panel {
+            position: static;
+          }
+        }
+
+        @media (max-width: 560px) {
+          .app-shell {
+            padding: 14px;
+          }
+
+          .panel,
+          .history-panel {
+            padding: 18px;
+          }
+
+          .section-heading {
+            display: grid;
+          }
+
+          .tagline {
+            font-size: 16px;
+          }
+        }
+      `}</style>
     </main>
   );
 }
