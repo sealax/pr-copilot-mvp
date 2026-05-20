@@ -16,7 +16,6 @@ export default function Home() {
   const [remainingGenerations, setRemainingGenerations] = useState<number | null>(null);
   const [generationLimit, setGenerationLimit] = useState(5);
 
-  const [evaluation, setEvaluation] = useState("");
   const [verdict, setVerdict] = useState<"GO" | "CONDITIONAL" | "NO-GO" | "">("");
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -30,7 +29,6 @@ export default function Home() {
 
   const [evalData, setEvalData] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
-  const [selectedGeneration, setSelectedGeneration] = useState<any>(null);
 
 useEffect(() => {
   if (!supabase) return;
@@ -94,7 +92,6 @@ const logout = async () => {
   setRiskScore(null);
   setPrompt("");
   setOutput("");
-  setSelectedGeneration(null);
   setRemainingGenerations(null);
 };
 
@@ -139,28 +136,13 @@ useEffect(() => {
   fetchUsage().catch((e) => console.error("Usage fetch failed:", e));
 }, [user]);
 
-  function extractVerdict(text: string): "GO" | "CONDITIONAL" | "NO-GO" | "" {
-    const m = text.match(/PR Readiness Verdict:\s*(GO|CONDITIONAL|NO-GO)/i);
-    if (!m) return "";
-    const v = m[1].toUpperCase();
-    return (v === "GO" || v === "CONDITIONAL" || v === "NO-GO") ? (v as any) : "";
-  }
-
-  function extractRiskScore(text: string): number | null {
-  const m = text.match(/Overall Risk Score \(0–100\):\s*(\d+)/i);
-  if (!m) return null;
-  return parseInt(m[1], 10);
-  }
-
   const handleEvaluate = async () => {
   if (!user) return alert("Sign in to run a PR readiness check");
   if (!prompt.trim()) return alert("Add your announcement first");
 
   setIsEvaluating(true);
-  setEvaluation("");
   setVerdict("");
   setOutput("");
-  setSelectedGeneration(null);
 
   try {
     const headers = await getApiHeaders();
@@ -475,10 +457,8 @@ useEffect(() => {
 
         if (error) {
           console.error("Error fetching generation:", error);
-          setSelectedGeneration(null);
           setOutput("");
         } else {
-          setSelectedGeneration(data);
           setOutput(data?.output ?? "");
         }
       }}
