@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
+import Head from 'next/head';
 import { createClient } from '@supabase/supabase-js';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { Header } from '../components/ui/Header';
 import { PageContainer } from '../components/ui/PageContainer';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -272,39 +272,214 @@ useEffect(() => {
 
 
   return (
-    <main className="app-shell">
-      <Header
-        eyebrow="PR readiness operator"
-        title="PR Copilot"
-        description="Evaluate whether an announcement deserves media attention before drafting the release."
-        actions={
-          <Card className="account-panel">
+    <>
+      <Head>
+        <title>PR Copilot | Test your story before you pitch it</title>
+        <meta
+          name="description"
+          content="Evaluate whether an announcement is newsworthy, improve the media angle, and generate a press-ready draft."
+        />
+      </Head>
+
+      <main className="app-shell">
+      <nav className="marketing-nav" aria-label="Primary navigation">
+        <PageContainer className="marketing-nav-inner">
+          <a className="wordmark" href="#top" aria-label="PR Copilot home">
+            <span className="wordmark-mark">PR</span>
+            <span>PR Copilot</span>
+          </a>
+
+          <div className="nav-links">
+            <a href="#how-it-works">How it works</a>
+            <a href="#features">Capabilities</a>
+            <a href="#faq">FAQ</a>
+          </div>
+
+          <div className="nav-account">
             {user ? (
               <>
-                <span className="account-label">Signed in</span>
-                <strong>{user.email}</strong>
+                <span className="nav-user">{user.email}</span>
                 <Button variant="secondary" size="small" onClick={logout}>
                   Log out
                 </Button>
               </>
             ) : (
               <>
-                <span className="account-label">Authentication required</span>
-                <div className="login-actions">
-                  <Button size="small" onClick={() => login("github")}>
-                    Continue with GitHub
-                  </Button>
-                  <Button variant="secondary" size="small" onClick={() => login("google")}>
-                    Continue with Google
-                  </Button>
-                </div>
+                <Button variant="tertiary" size="small" onClick={() => login("google")}>
+                  Sign in with Google
+                </Button>
+                <Button size="small" onClick={() => login("github")}>
+                  Start with GitHub
+                </Button>
               </>
             )}
-          </Card>
-        }
-      />
+          </div>
+        </PageContainer>
+      </nav>
 
-      <PageContainer className="workbench">
+      <section className="hero-section" id="top">
+        <PageContainer className="hero-grid">
+          <div className="hero-copy">
+            <p className="eyebrow">Editorial judgment before amplification</p>
+            <h1>
+              PR Copilot helps founders and comms teams test whether a story is newsworthy,
+              improve the angle, and generate press-ready pitches.
+            </h1>
+            <p className="hero-description">
+              Put the announcement under editorial pressure before you spend time drafting,
+              pitching, or asking journalists to care.
+            </p>
+            <div className="hero-actions">
+              <a className="button button-primary" href="#workspace">
+                Evaluate your announcement
+              </a>
+              <a className="button button-secondary" href="#how-it-works">
+                See how it works
+              </a>
+            </div>
+            <p className="hero-note">
+              Structured PR assessment. Clear next actions. Drafting only when the story is ready.
+            </p>
+          </div>
+
+          <Card className="hero-evaluation">
+            <div className="hero-card-header">
+              <div>
+                <p className="eyebrow">Sample readiness view</p>
+                <h2>Series A expansion announcement</h2>
+              </div>
+              <span className="verdict-badge conditional">Conditional</span>
+            </div>
+
+            <div className="signal-list">
+              <div className="signal-row">
+                <span>News value</span>
+                <strong>Needs a sharper market consequence</strong>
+              </div>
+              <div className="signal-row">
+                <span>Evidence</span>
+                <strong>Named customer proof is missing</strong>
+              </div>
+              <div className="signal-row">
+                <span>Timing</span>
+                <strong>Credible, but not yet urgent</strong>
+              </div>
+            </div>
+
+            <div className="hero-recommendation">
+              <span>Operator recommendation</span>
+              <p>Strengthen the proof point and lead with what changes for the market, not the funding event.</p>
+            </div>
+          </Card>
+        </PageContainer>
+      </section>
+
+      <section className="workflow-section" id="how-it-works">
+        <PageContainer>
+          <div className="marketing-section-heading">
+            <div>
+              <p className="eyebrow">A disciplined workflow</p>
+              <h2>Evaluation comes before generation.</h2>
+            </div>
+            <p>
+              PR Copilot applies editorial pressure before it writes. Weak announcements are challenged,
+              viable stories are improved, and drafting stays gated by the verdict.
+            </p>
+          </div>
+
+          <div className="workflow-steps">
+            <article>
+              <span>01</span>
+              <h3>Brief the announcement</h3>
+              <p>Add the market context, proof points, partners, funding, and the claim you want to make.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>Get an editorial verdict</h3>
+              <p>See the likely journalist reaction, primary failure modes, and concrete next actions.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>Draft only when ready</h3>
+              <p>GO and CONDITIONAL evaluations can move into generation. NO-GO announcements cannot.</p>
+            </article>
+          </div>
+        </PageContainer>
+      </section>
+
+      <section className="features-section" id="features">
+        <PageContainer>
+          <div className="marketing-section-heading compact-heading">
+            <div>
+              <p className="eyebrow">Built for better PR decisions</p>
+              <h2>From raw announcement to credible media angle.</h2>
+            </div>
+          </div>
+
+          <div className="feature-grid">
+            <Card as="article" className="feature-card">
+              <span className="feature-index">01</span>
+              <h3>PR readiness evaluation</h3>
+              <p>Test the strength, evidence, relevance, and timing of an announcement before outreach begins.</p>
+            </Card>
+            <Card as="article" className="feature-card">
+              <span className="feature-index">02</span>
+              <h3>Media angle generation</h3>
+              <p>Identify the strongest editorial frame instead of defaulting to company-centric messaging.</p>
+            </Card>
+            <Card as="article" className="feature-card">
+              <span className="feature-index">03</span>
+              <h3>Pitch drafting</h3>
+              <p>Generate a working press draft only after the underlying story clears the readiness gate.</p>
+            </Card>
+            <Card as="article" className="feature-card">
+              <span className="feature-index">04</span>
+              <h3>Next-action recommendations</h3>
+              <p>Turn weaknesses into a practical list of proof, positioning, and timing improvements.</p>
+            </Card>
+          </div>
+        </PageContainer>
+      </section>
+
+      <section className="proof-section" aria-labelledby="proof-heading">
+        <PageContainer>
+          <div className="marketing-section-heading">
+            <div>
+              <p className="eyebrow">Early access</p>
+              <h2 id="proof-heading">Proof should be earned, not invented.</h2>
+            </div>
+            <p>
+              Verified founder feedback, customer quotes, and usage milestones will appear here as the
+              early-access programme develops.
+            </p>
+          </div>
+
+          <div className="proof-grid">
+            <div>
+              <span>Founder feedback</span>
+              <strong>Reserved for a verified customer quote</strong>
+            </div>
+            <div>
+              <span>Usage signal</span>
+              <strong>Reserved for a measured product milestone</strong>
+            </div>
+            <div>
+              <span>Team outcome</span>
+              <strong>Reserved for a documented PR result</strong>
+            </div>
+          </div>
+        </PageContainer>
+      </section>
+
+      <section className="workspace-intro">
+        <PageContainer>
+          <p className="eyebrow">Try the workflow</p>
+          <h2>Put your announcement under editorial pressure.</h2>
+          <p>Start with the facts. PR Copilot will assess readiness before any draft is generated.</p>
+        </PageContainer>
+      </section>
+
+      <PageContainer className="workbench" id="workspace">
         <div className="primary-column">
           <Card as="section" className="panel">
             <div className="section-heading">
@@ -506,6 +681,57 @@ useEffect(() => {
           </div>
         </Card>
       </PageContainer>
-    </main>
+
+      <section className="faq-section" id="faq">
+        <PageContainer className="faq-layout">
+          <div>
+            <p className="eyebrow">Questions, answered</p>
+            <h2>What teams need to know before they start.</h2>
+          </div>
+
+          <div className="faq-list">
+            <details>
+              <summary>Who is PR Copilot for?</summary>
+              <p>
+                Founders, in-house comms teams, and operators who need to decide whether an announcement
+                is strong enough for media outreach before investing time in a full campaign.
+              </p>
+            </details>
+            <details>
+              <summary>Why not just use ChatGPT?</summary>
+              <p>
+                PR Copilot follows a structured evaluation-first workflow. It gives an editorial verdict,
+                surfaces failure modes, and blocks drafting when the announcement is not ready.
+              </p>
+            </details>
+            <details>
+              <summary>Do I need PR experience?</summary>
+              <p>
+                No. The assessment explains what a journalist is likely to challenge and turns that judgment
+                into specific actions you can take.
+              </p>
+            </details>
+            <details>
+              <summary>How many pitches can I generate?</summary>
+              <p>
+                The current free allowance is shown inside the workspace when you sign in. Generation is
+                available only for saved GO or CONDITIONAL evaluations.
+              </p>
+            </details>
+          </div>
+        </PageContainer>
+      </section>
+
+      <footer className="site-footer">
+        <PageContainer>
+          <a className="wordmark" href="#top">
+            <span className="wordmark-mark">PR</span>
+            <span>PR Copilot</span>
+          </a>
+          <p>Editorial judgment before press release generation.</p>
+        </PageContainer>
+      </footer>
+      </main>
+    </>
   );
 }
