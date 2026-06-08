@@ -292,6 +292,7 @@ useEffect(() => {
           <div className="nav-links">
             <a href="#how-it-works">How it works</a>
             <a href="#features">Capabilities</a>
+            <a href="#pricing">Pricing</a>
             <a href="#faq">FAQ</a>
           </div>
 
@@ -467,6 +468,118 @@ useEffect(() => {
               <span>Team outcome</span>
               <strong>Reserved for a documented PR result</strong>
             </div>
+          </div>
+        </PageContainer>
+      </section>
+
+      <section className="comparison-section" id="why-pr-copilot">
+        <PageContainer className="comparison-layout">
+          <div className="comparison-intro">
+            <p className="eyebrow">Purpose-built PR judgment</p>
+            <h2>Why not just use ChatGPT?</h2>
+            <p>
+              A general-purpose model can help write copy. PR Copilot is designed to decide whether
+              the story deserves to be written in the first place.
+            </p>
+          </div>
+
+          <div className="comparison-table" role="table" aria-label="ChatGPT and PR Copilot comparison">
+            <div className="comparison-header" role="row">
+              <span role="columnheader">What the workflow needs</span>
+              <span role="columnheader">General-purpose AI</span>
+              <span role="columnheader">PR Copilot</span>
+            </div>
+            <div className="comparison-row" role="row">
+              <strong role="cell">A repeatable process</strong>
+              <span role="cell">Depends on the prompt you create</span>
+              <span role="cell">Guides every announcement through a structured PR workflow</span>
+            </div>
+            <div className="comparison-row" role="row">
+              <strong role="cell">Editorial judgment</strong>
+              <span role="cell">Optimises for a helpful response</span>
+              <span role="cell">Returns a clear GO, CONDITIONAL, or NO-GO verdict</span>
+            </div>
+            <div className="comparison-row" role="row">
+              <strong role="cell">Weak-story handling</strong>
+              <span role="cell">Can polish the premise it is given</span>
+              <span role="cell">Surfaces failure modes and blocks unsafe generation</span>
+            </div>
+            <div className="comparison-row" role="row">
+              <strong role="cell">Actionable direction</strong>
+              <span role="cell">Requires follow-up prompting</span>
+              <span role="cell">Provides journalist reaction and specific next actions</span>
+            </div>
+          </div>
+        </PageContainer>
+      </section>
+
+      <section className="pricing-section" id="pricing" aria-labelledby="pricing-heading">
+        <PageContainer>
+          <div className="marketing-section-heading">
+            <div>
+              <p className="eyebrow">Simple plans</p>
+              <h2 id="pricing-heading">Start with one story. Scale to a team workflow.</h2>
+            </div>
+            <p>
+              Indicative pricing for planned subscriptions. Billing is not yet enabled during early access.
+            </p>
+          </div>
+
+          <div className="pricing-grid">
+            <Card as="article" className="pricing-card">
+              <div>
+                <p className="pricing-name">Free</p>
+                <p className="pricing-price">
+                  <strong>£0</strong>
+                  <span>forever</span>
+                </p>
+                <p className="pricing-description">For testing a small number of announcements.</p>
+              </div>
+              <ul className="pricing-features">
+                <li>5 evaluations</li>
+                <li>Basic pitch generation</li>
+              </ul>
+              <a className="button button-secondary" href="#workspace">
+                Start evaluating
+              </a>
+            </Card>
+
+            <Card as="article" className="pricing-card pricing-card-featured">
+              <div className="pricing-card-topline">
+                <p className="pricing-name">Pro</p>
+                <span>Most popular</span>
+              </div>
+              <div>
+                <p className="pricing-price">
+                  <strong>£29</strong>
+                  <span>/ month</span>
+                </p>
+                <p className="pricing-description">For founders and comms leads running regular outreach.</p>
+              </div>
+              <ul className="pricing-features">
+                <li>Unlimited evaluations</li>
+                <li>Advanced recommendations</li>
+                <li>Saved history</li>
+              </ul>
+              <span className="button button-primary pricing-placeholder">Coming soon</span>
+            </Card>
+
+            <Card as="article" className="pricing-card">
+              <div>
+                <p className="pricing-name">Team</p>
+                <p className="pricing-price">
+                  <strong>£79</strong>
+                  <span>/ month</span>
+                </p>
+                <p className="pricing-description">For teams coordinating multiple campaigns.</p>
+              </div>
+              <ul className="pricing-features">
+                <li>Multiple users</li>
+                <li>Shared campaigns</li>
+                <li>Team workspace</li>
+              </ul>
+              <span className="button button-secondary pricing-placeholder">Coming soon</span>
+            </Card>
           </div>
         </PageContainer>
       </section>
