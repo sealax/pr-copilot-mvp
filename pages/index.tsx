@@ -17,8 +17,11 @@ export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [output, setOutput] = useState('');
   const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
   const [remainingGenerations, setRemainingGenerations] = useState<number | null>(null);
   const [generationLimit, setGenerationLimit] = useState(10);
+  const [remainingDemoChecks, setRemainingDemoChecks] = useState(2);
+  const [remainingDemoDrafts, setRemainingDemoDrafts] = useState(1);
 
   const [verdict, setVerdict] = useState<"GO" | "CONDITIONAL" | "NO-GO" | "">("");
   const [isEvaluating, setIsEvaluating] = useState(false);
@@ -33,14 +36,21 @@ export default function Home() {
   const [history, setHistory] = useState<any[]>([]);
 
 useEffect(() => {
-  if (!supabase) return;
-  supabase.auth.getUser().then(({ data }) => setUser(data?.user ?? null));
+  if (!supabase) {
+    setAuthReady(true);
+    return;
+  }
+
+  supabase.auth.getUser().then(({ data }) => {
+    setUser(data?.user ?? null);
+    setAuthReady(true);
+  });
 }, []);
 
 const fetchHistory = async () => {
   if (!supabase || !user) return;
 
-    const headers = await getApiHeaders();
+    const headers = await getApiHeaders(true);
     const res = await fetch("/api/history", { headers });
     const data = await res.json();
 
@@ -98,18 +108,20 @@ const logout = async () => {
   setRemainingGenerations(null);
 };
 
-const getApiHeaders = async () => {
+const getApiHeaders = async (requireAuth = false) => {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
 
   if (!supabase) {
-    throw new Error("Authentication required");
+    if (requireAuth) throw new Error("Authentication required");
+    return headers;
   }
 
   const { data } = await supabase.auth.getSession();
   const accessToken = data.session?.access_token;
 
   if (!accessToken) {
-    throw new Error("Authentication required");
+    if (requireAuth) throw new Error("Authentication required");
+    return headers;
   }
 
   headers.Authorization = `Bearer ${accessToken}`;
@@ -127,6 +139,16 @@ const fetchUsage = async () => {
     return;
   }
 
+  if (data.demo) {
+    setRemainingDemoChecks(
+      typeof data.remainingChecks === "number" ? data.remainingChecks : 2
+    );
+    setRemainingDemoDrafts(
+      typeof data.remainingDrafts === "number" ? data.remainingDrafts : 1
+    );
+    return;
+  }
+
   setRemainingGenerations(
     typeof data.remaining_generations === "number" ? data.remaining_generations : null
   );
@@ -134,14 +156,16 @@ const fetchUsage = async () => {
 };
 
 useEffect(() => {
-  if (!user) return;
+  if (!authReady) return;
 
   fetchUsage().catch((e) => console.error("Usage fetch failed:", e));
-}, [user]);
+}, [user, authReady]);
 
   const handleEvaluate = async () => {
-  if (!user) return alert("Sign in to run a PR readiness check");
   if (!prompt.trim()) return alert("Add your announcement first");
+  if (!user && remainingDemoChecks <= 0) {
+    return alert("You've used both free demo evaluations. Create a free account to continue.");
+  }
 
   setIsEvaluating(true);
   setVerdict("");
@@ -167,6 +191,13 @@ useEffect(() => {
     const data = await res.json();
 
       if (!res.ok) {
+        if (typeof data.remainingChecks === "number") {
+          setRemainingDemoChecks(data.remainingChecks);
+        }
+        if (typeof data.remainingDrafts === "number") {
+          setRemainingDemoDrafts(data.remainingDrafts);
+        }
+
         const message =
           data?.error === "Evaluation could not be saved"
             ? "Evaluation could not be saved. Please try again before generating a press release."
@@ -175,34 +206,47 @@ useEffect(() => {
         return alert(message);
       }
 
-      if (!data.id) {
+      if (user && !data.id) {
         return alert("Evaluation could not be saved. Please try again before generating a press release.");
       }
 
       setEvalData(data);
       setVerdict(data.verdict ?? "");
+      if (typeof data.remainingChecks === "number") {
+        setRemainingDemoChecks(data.remainingChecks);
+      }
+      if (typeof data.remainingDrafts === "number") {
+        setRemainingDemoDrafts(data.remainingDrafts);
+      }
 
-      fetchHistory().catch((e) => console.error("History refresh failed:", e));
+      if (user) {
+        fetchHistory().catch((e) => console.error("History refresh failed:", e));
+      }
 
   } catch (e) {
     console.error(e);
-    alert(e instanceof Error && e.message === "Authentication required" ? "Sign in to run a PR readiness check" : "Evaluation failed");
+    alert("Evaluation failed");
   } finally {
     setIsEvaluating(false);
   }
   };
 
   const handleSubmit = async () => {
-    if (!user) return alert("Sign in to generate a press release");
     if (!evalData) return alert("Run PR Readiness Check first");
     if (!(verdict === "GO" || verdict === "CONDITIONAL")) {
       return alert("PR Readiness Verdict is NO-GO. Generation is blocked.");
   }
-    if (!evalData.id) {
+    if (user && !evalData.id) {
       return alert("Evaluation was not saved, so generation cannot run. Please run the readiness check again.");
     }
-    if (remainingGenerations !== null && remainingGenerations <= 0) {
+    if (!user && !evalData.demoEvaluationToken) {
+      return alert("Run a new PR readiness check before generating a demo draft.");
+    }
+    if (user && remainingGenerations !== null && remainingGenerations <= 0) {
       return alert(`You’ve used all ${generationLimit} free generations`);
+    }
+    if (!user && remainingDemoDrafts <= 0) {
+      return alert("You've used your free demo draft. Create a free account to continue.");
     }
 
   setIsGenerating(true);
@@ -216,12 +260,20 @@ useEffect(() => {
       body: JSON.stringify({
         prompt,
         evaluation_id: evalData?.id ?? null,
+        demoEvaluationToken: evalData?.demoEvaluationToken ?? null,
   }),
     });
 
     const data = await res.json();
 
     if (!res.ok) {
+      if (typeof data.remainingChecks === "number") {
+        setRemainingDemoChecks(data.remainingChecks);
+      }
+      if (typeof data.remainingDrafts === "number") {
+        setRemainingDemoDrafts(data.remainingDrafts);
+      }
+
       return alert(data?.error ?? "Generation failed");
     }
 
@@ -233,7 +285,15 @@ useEffect(() => {
     if (typeof data.remaining_generations === "number") {
       setRemainingGenerations(data.remaining_generations);
     }
-    fetchHistory().catch((e) => console.error("History refresh failed:", e));
+    if (typeof data.remainingChecks === "number") {
+      setRemainingDemoChecks(data.remainingChecks);
+    }
+    if (typeof data.remainingDrafts === "number") {
+      setRemainingDemoDrafts(data.remainingDrafts);
+    }
+    if (user) {
+      fetchHistory().catch((e) => console.error("History refresh failed:", e));
+    }
 
   } catch (e) {
     console.error(e);
@@ -259,16 +319,33 @@ useEffect(() => {
   const verdictLabel = verdict || "Not evaluated";
   const verdictClass =
     verdict === "GO" ? "go" : verdict === "CONDITIONAL" ? "conditional" : verdict === "NO-GO" ? "nogo" : "neutral";
-  const canGenerate = Boolean(user && evalData?.id && (verdict === "GO" || verdict === "CONDITIONAL"));
-  const generationStatus = !user
-    ? "Sign in to generate after a readiness check."
-    : !evalData
-    ? "Run and save a readiness evaluation before generating copy."
+  const hasGenerationGate = user ? Boolean(evalData?.id) : Boolean(evalData?.demoEvaluationToken);
+  const hasGenerationAllowance = user
+    ? remainingGenerations === null || remainingGenerations > 0
+    : remainingDemoDrafts > 0;
+  const canGenerate = Boolean(
+    hasGenerationGate &&
+      hasGenerationAllowance &&
+      (verdict === "GO" || verdict === "CONDITIONAL")
+  );
+  const generationStatus = !evalData
+    ? user
+      ? "Run and save a readiness evaluation before generating copy."
+      : "Run a readiness evaluation before generating your demo draft."
     : verdict === "NO-GO"
     ? "Generation is blocked because this evaluation is NO-GO."
     : verdict === "GO" || verdict === "CONDITIONAL"
-    ? "Generation is available for this saved evaluation."
+    ? user
+      ? "Generation is available for this saved evaluation."
+      : remainingDemoDrafts > 0
+      ? "Your anonymous evaluation can generate one demo draft. It will not be saved."
+      : "Your demo draft allowance is complete. Create a free account to continue."
     : "Run a readiness evaluation before generating copy.";
+  const demoLimitReached = !user && (remainingDemoChecks <= 0 || remainingDemoDrafts <= 0);
+  const demoStatusText =
+    remainingDemoChecks === 2 && remainingDemoDrafts === 1
+      ? "2 PR checks included · 1 draft generation included"
+      : `${remainingDemoChecks} PR ${remainingDemoChecks === 1 ? "check" : "checks"} remaining · ${remainingDemoDrafts} draft ${remainingDemoDrafts === 1 ? "generation" : "generations"} remaining`;
 
 
   return (
@@ -310,7 +387,7 @@ useEffect(() => {
                   Sign in with Google
                 </Button>
                 <Button size="small" onClick={() => login("github")}>
-                  Start with GitHub
+                  Create free account
                 </Button>
               </>
             )}
@@ -332,11 +409,11 @@ useEffect(() => {
             </p>
             <div className="hero-actions">
               <a className="button button-primary" href="#workspace">
-                Evaluate your announcement
+                Try Free PR Check
               </a>
-              <a className="button button-secondary" href="#how-it-works">
-                See how it works
-              </a>
+              <Button variant="secondary" onClick={() => login("google")}>
+                Create Free Account
+              </Button>
             </div>
             <p className="hero-note">
               Structured PR assessment. Clear next actions. Drafting only when the story is ready.
@@ -592,15 +669,54 @@ useEffect(() => {
         </PageContainer>
       </section>
 
+      {authReady && !user && (
+        <PageContainer>
+          <div className={`demo-banner ${remainingDemoDrafts <= 0 ? "complete" : ""}`}>
+            <div>
+              <strong>{remainingDemoDrafts <= 0 ? "Demo Complete" : "Demo Mode"}</strong>
+              <span>{demoStatusText}</span>
+            </div>
+            {remainingDemoChecks <= 0 && remainingDemoDrafts > 0 && (
+              <Button variant="tertiary" size="small" onClick={() => login("google")}>
+                Create a free account for more evaluations
+              </Button>
+            )}
+          </div>
+        </PageContainer>
+      )}
+
       <PageContainer className="workbench" id="workspace">
         <div className="primary-column">
+          {authReady && demoLimitReached && (
+            <Card as="section" className="demo-signup-card">
+              <p className="eyebrow">
+                {remainingDemoDrafts <= 0 ? "Demo complete" : "Evaluation allowance used"}
+              </p>
+              <h2>You've used your free demo.</h2>
+              <p>Create a free account to:</p>
+              <ul className="demo-benefits">
+                <li>Run additional PR readiness checks</li>
+                <li>Generate more drafts</li>
+                <li>Save your evaluations</li>
+                <li>Build a launch history</li>
+              </ul>
+              <Button onClick={() => login("google")}>Create Free Account</Button>
+            </Card>
+          )}
+
           <Card as="section" className="panel">
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Step 1</p>
                 <h2>Readiness assessment</h2>
               </div>
-              <span className="subtle-status">{user ? "Ready to evaluate" : "Sign in required"}</span>
+              <span className="subtle-status">
+                {user
+                  ? "Ready to evaluate"
+                  : remainingDemoChecks > 0
+                  ? `${remainingDemoChecks} demo ${remainingDemoChecks === 1 ? "check" : "checks"} remaining`
+                  : "Demo checks complete"}
+              </span>
             </div>
 
             <p className="section-copy">
@@ -636,11 +752,16 @@ useEffect(() => {
             </label>
 
             <div className="action-row">
-              <Button onClick={handleEvaluate} disabled={isEvaluating || !user}>
+              <Button
+                onClick={handleEvaluate}
+                disabled={isEvaluating || (!user && remainingDemoChecks <= 0)}
+              >
                 {isEvaluating ? "Evaluating..." : "Run PR Readiness Check"}
               </Button>
               <span className="helper-text">
-                Evaluation must be saved before generation is available.
+                {user
+                  ? "Evaluation must be saved before generation is available."
+                  : "Demo evaluations are not saved and do not appear in history."}
               </span>
             </div>
           </Card>
@@ -715,7 +836,7 @@ useEffect(() => {
                   ? remainingGenerations === null
                     ? "Checking usage"
                     : `${remainingGenerations} of ${generationLimit} free remaining`
-                  : "Sign in to view usage"}
+                  : `${remainingDemoDrafts} demo ${remainingDemoDrafts === 1 ? "draft" : "drafts"} remaining`}
               </span>
             </div>
 
@@ -734,9 +855,13 @@ useEffect(() => {
               <div className="output-card">
                 <div className="output-header">
                   <h3>Generated draft</h3>
-                  <Button variant="secondary" size="small" onClick={copyOutput}>
-                    {copiedOutput ? "Copied" : "Copy"}
-                  </Button>
+                  {user ? (
+                    <Button variant="secondary" size="small" onClick={copyOutput}>
+                      {copiedOutput ? "Copied" : "Copy"}
+                    </Button>
+                  ) : (
+                    <span className="helper-text">Demo drafts are not saved or exportable</span>
+                  )}
                 </div>
                 <pre>{output}</pre>
               </div>
@@ -756,13 +881,22 @@ useEffect(() => {
             </div>
           </div>
 
-          {history.length === 0 && (
+          {authReady && !user ? (
+            <div className="anonymous-history-gate">
+              <p className="empty-state compact">
+                Create a free account to save PR evaluations, generate additional drafts, and build a launch history.
+              </p>
+              <Button size="small" onClick={() => login("google")}>
+                Create Free Account
+              </Button>
+            </div>
+          ) : user && history.length === 0 ? (
             <p className="empty-state compact">
               No saved evaluations yet. Completed checks will appear here.
             </p>
-          )}
+          ) : null}
 
-          <div className="history-list">
+          {user && <div className="history-list">
             {history.map((item) => (
               <button
                 className="history-item"
@@ -791,7 +925,7 @@ useEffect(() => {
                 </span>
               </button>
             ))}
-          </div>
+          </div>}
         </Card>
       </PageContainer>
 
@@ -827,8 +961,8 @@ useEffect(() => {
             <details>
               <summary>How many pitches can I generate?</summary>
               <p>
-                The current free allowance is shown inside the workspace when you sign in. Generation is
-                available only for saved GO or CONDITIONAL evaluations.
+                Anonymous visitors can run two readiness checks and generate one draft. Signed-in usage
+                is shown inside the workspace. Drafting remains available only for GO or CONDITIONAL evaluations.
               </p>
             </details>
           </div>

@@ -1,6 +1,12 @@
 import OpenAI from 'openai';
 
 import { createClient } from '@supabase/supabase-js';
+import {
+  consumeDemoDraft,
+  getDemoAllowance,
+  getDemoVisitorHash,
+  verifyDemoEvaluationToken,
+} from "../../lib/server/demoUsage";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -17,13 +23,13 @@ const RATE_LIMIT_MAX_REQUESTS = 5;
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
-async function getVerifiedUser(req) {
+async function getOptionalVerifiedUser(req) {
   const authHeader = Array.isArray(req.headers.authorization)
     ? req.headers.authorization[0]
     : req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
-    throw new Error("Missing Supabase access token");
+    return null;
   }
 
   const accessToken = authHeader.slice("Bearer ".length);
@@ -78,8 +84,8 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { prompt, evaluation_id } = req.body;
-    const verifiedUser = await getVerifiedUser(req);
+    const { prompt, evaluation_id, demoEvaluationToken } = req.body;
+    const verifiedUser = await getOptionalVerifiedUser(req);
 
     const cleanPrompt = cleanRequiredString(prompt, "prompt", MAX_PROMPT_LENGTH);
 
@@ -87,58 +93,95 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: cleanPrompt.error });
     }
 
-    const cleanEvaluationId = cleanRequiredString(
-      evaluation_id,
-      "evaluation_id",
-      MAX_EVALUATION_ID_LENGTH
-    );
-
-    if (cleanEvaluationId.error) {
-      return res.status(400).json({ error: cleanEvaluationId.error });
-    }
-
-    const rateLimitError = checkRateLimit(verifiedUser.id);
+    const demoIpHash = verifiedUser ? null : getDemoVisitorHash(req);
+    const rateLimitError = checkRateLimit(verifiedUser?.id ?? `demo:${demoIpHash}`);
 
     if (rateLimitError) {
       return res.status(429).json({ error: rateLimitError });
     }
 
-    const { count: generationsUsed, error: usageError } = await supabase
-      .from("generations")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", verifiedUser.id);
+    if (!verifiedUser && demoIpHash) {
+      const demoEvaluation = verifyDemoEvaluationToken(
+        demoEvaluationToken,
+        demoIpHash,
+        cleanPrompt.value
+      );
 
-    if (usageError || typeof generationsUsed !== "number") {
-      console.error("Supabase usage count error:", usageError);
-      return res.status(500).json({ error: "Could not check generation usage" });
+      if (!demoEvaluation) {
+        return res.status(403).json({
+          error: "Run a PR readiness check before generating a demo draft",
+        });
+      }
+
+      if (demoEvaluation.verdict === "NO-GO") {
+        return res.status(403).json({
+          error: "Generation is blocked for NO-GO evaluations",
+        });
+      }
+
+      const demoAllowance = await getDemoAllowance(supabase, demoIpHash);
+
+      if (demoAllowance.remainingDrafts <= 0) {
+        return res.status(403).json({
+          error: "Free demo draft limit reached",
+          ...demoAllowance,
+        });
+      }
     }
 
-    if (generationsUsed >= FREE_GENERATION_LIMIT) {
-      return res.status(403).json({
-        error: "Free generation limit reached",
-        generations_used: generationsUsed,
-        remaining_generations: 0,
-      });
-    }
+    let generationsUsed: number | null = null;
+    let evaluationId: string | null = null;
 
-    let evaluationId = cleanEvaluationId.value;
-    let evaluationVerdict: "GO" | "CONDITIONAL" | "NO-GO" | null = null;
+    if (verifiedUser) {
+      const cleanEvaluationId = cleanRequiredString(
+        evaluation_id,
+        "evaluation_id",
+        MAX_EVALUATION_ID_LENGTH
+      );
 
-    const { data: evaluation, error: evaluationError } = await supabase
-      .from("evaluations")
-      .select("id, verdict, user_id")
-      .eq("id", evaluationId)
-      .eq("user_id", verifiedUser.id)
-      .single();
+      if (cleanEvaluationId.error) {
+        return res.status(400).json({ error: cleanEvaluationId.error });
+      }
 
-    if (evaluationError || !evaluation) {
-      return res.status(404).json({ error: "Evaluation not found" });
-    }
+      const { count, error: usageError } = await supabase
+        .from("generations")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", verifiedUser.id);
 
-    evaluationVerdict = evaluation.verdict;
+      if (usageError || typeof count !== "number") {
+        console.error("Supabase usage count error:", usageError);
+        return res.status(500).json({ error: "Could not check generation usage" });
+      }
 
-    if (evaluationVerdict === "NO-GO") {
-      return res.status(403).json({ error: "Generation is blocked for NO-GO evaluations" });
+      generationsUsed = count;
+
+      if (generationsUsed >= FREE_GENERATION_LIMIT) {
+        return res.status(403).json({
+          error: "Free generation limit reached",
+          generations_used: generationsUsed,
+          remaining_generations: 0,
+        });
+      }
+
+      evaluationId = cleanEvaluationId.value;
+      let evaluationVerdict: "GO" | "CONDITIONAL" | "NO-GO" | null = null;
+
+      const { data: evaluation, error: evaluationError } = await supabase
+        .from("evaluations")
+        .select("id, verdict, user_id")
+        .eq("id", evaluationId)
+        .eq("user_id", verifiedUser.id)
+        .single();
+
+      if (evaluationError || !evaluation) {
+        return res.status(404).json({ error: "Evaluation not found" });
+      }
+
+      evaluationVerdict = evaluation.verdict;
+
+      if (evaluationVerdict === "NO-GO") {
+        return res.status(403).json({ error: "Generation is blocked for NO-GO evaluations" });
+      }
     }
 
     const system = `You are a senior tech PR professional.
@@ -169,11 +212,28 @@ ${cleanPrompt.value}`;
 
     const text = completion.choices?.[0]?.message?.content ?? '';
 
+    if (!verifiedUser && demoIpHash) {
+      const demoAllowance = await consumeDemoDraft(supabase, demoIpHash);
+
+      if (!demoAllowance) {
+        const currentAllowance = await getDemoAllowance(supabase, demoIpHash);
+        return res.status(403).json({
+          error: "Free demo draft limit reached",
+          ...currentAllowance,
+        });
+      }
+
+      return res.status(200).json({
+        response: text,
+        ...demoAllowance,
+      });
+    }
+
     const { data, error } = await supabase
       .from("generations")
       .insert({
         evaluation_id: evaluationId,
-        user_id: verifiedUser.id,
+        user_id: verifiedUser!.id,
         prompt: cleanPrompt.value,
         output: text,
         model: "gpt-4o-mini",
@@ -191,7 +251,7 @@ ${cleanPrompt.value}`;
       return res.status(500).json({ error: "Could not save generation" });
     }
 
-    const nextGenerationsUsed = generationsUsed + 1;
+    const nextGenerationsUsed = (generationsUsed ?? 0) + 1;
 
     return res.status(200).json({
       response: text,
@@ -201,10 +261,6 @@ ${cleanPrompt.value}`;
     });
 
   } catch (err) {
-    if (err instanceof Error && err.message === "Missing Supabase access token") {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
     if (err instanceof Error && err.message === "Invalid Supabase access token") {
       return res.status(401).json({ error: "Invalid Supabase access token" });
     }

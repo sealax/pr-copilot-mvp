@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getDemoAllowance, getDemoVisitorHash } from "../../lib/server/demoUsage";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -7,13 +8,13 @@ const supabase = createClient(
 
 const FREE_GENERATION_LIMIT = 10;
 
-async function getVerifiedUser(req) {
+async function getOptionalVerifiedUser(req) {
   const authHeader = Array.isArray(req.headers.authorization)
     ? req.headers.authorization[0]
     : req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
-    throw new Error("Missing Supabase access token");
+    return null;
   }
 
   const accessToken = authHeader.slice("Bearer ".length);
@@ -32,7 +33,19 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const verifiedUser = await getVerifiedUser(req);
+    const verifiedUser = await getOptionalVerifiedUser(req);
+
+    if (!verifiedUser) {
+      const demoAllowance = await getDemoAllowance(
+        supabase,
+        getDemoVisitorHash(req)
+      );
+
+      return res.status(200).json({
+        demo: true,
+        ...demoAllowance,
+      });
+    }
 
     const { count: generationsUsed, error } = await supabase
       .from("generations")
@@ -50,10 +63,6 @@ export default async function handler(req, res) {
       generation_limit: FREE_GENERATION_LIMIT,
     });
   } catch (err) {
-    if (err instanceof Error && err.message === "Missing Supabase access token") {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
     if (err instanceof Error && err.message === "Invalid Supabase access token") {
       return res.status(401).json({ error: "Invalid Supabase access token" });
     }

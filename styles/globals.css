@@ -646,6 +646,72 @@ button {
   line-height: 1.65;
 }
 
+.demo-banner {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid #b8cfc5;
+  border-radius: var(--radius-md);
+  background: var(--color-accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.demo-banner > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.demo-banner strong {
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+}
+
+.demo-banner span {
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+}
+
+.demo-banner.complete {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-subtle);
+}
+
+.demo-signup-card {
+  padding: clamp(24px, 4vw, 36px);
+  border-color: #b8cfc5;
+  background: linear-gradient(135deg, #ffffff 0%, var(--color-accent-soft) 100%);
+}
+
+.demo-signup-card > p:not(.eyebrow) {
+  margin: var(--space-4) 0 0;
+  color: var(--color-ink-soft);
+}
+
+.demo-benefits {
+  margin: var(--space-5) 0 var(--space-6);
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+  color: var(--color-ink-soft);
+  list-style: none;
+}
+
+.demo-benefits li {
+  position: relative;
+  padding-left: var(--space-6);
+}
+
+.demo-benefits li::before {
+  content: "\2713";
+  position: absolute;
+  left: 0;
+  color: var(--color-success);
+  font-weight: 800;
+}
+
 .site-header-inner {
   display: flex;
   align-items: flex-start;
@@ -1081,6 +1147,12 @@ pre {
   gap: var(--space-3);
 }
 
+.anonymous-history-gate {
+  display: grid;
+  gap: var(--space-4);
+  justify-items: start;
+}
+
 .history-item {
   width: 100%;
   padding: var(--space-4);
@@ -1312,6 +1384,11 @@ pre {
 
   .hero-actions .button {
     width: 100%;
+  }
+
+  .demo-banner,
+  .demo-banner > div {
+    display: grid;
   }
 
   .hero-evaluation {
