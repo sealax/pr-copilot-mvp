@@ -6,7 +6,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const FREE_GENERATION_LIMIT = 10;
+const FREE_GENERATION_LIMIT = 5;
 
 async function getOptionalVerifiedUser(req) {
   const authHeader = Array.isArray(req.headers.authorization)

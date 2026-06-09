@@ -25,7 +25,7 @@ export default function Home() {
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [remainingGenerations, setRemainingGenerations] = useState<number | null>(null);
-  const [generationLimit, setGenerationLimit] = useState(10);
+  const [generationLimit, setGenerationLimit] = useState(5);
   const [remainingDemoChecks, setRemainingDemoChecks] = useState(2);
   const [remainingDemoDrafts, setRemainingDemoDrafts] = useState(1);
 
@@ -254,7 +254,7 @@ const fetchUsage = async () => {
   setRemainingGenerations(
     typeof data.remaining_generations === "number" ? data.remaining_generations : null
   );
-  setGenerationLimit(typeof data.generation_limit === "number" ? data.generation_limit : 10);
+  setGenerationLimit(typeof data.generation_limit === "number" ? data.generation_limit : 5);
 };
 
 useEffect(() => {

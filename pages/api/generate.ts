@@ -15,7 +15,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const FREE_GENERATION_LIMIT = 10;
+const FREE_GENERATION_LIMIT = 5;
 const MAX_PROMPT_LENGTH = 6000;
 const MAX_EVALUATION_ID_LENGTH = 100;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
