@@ -1,6 +1,12 @@
 import OpenAI from "openai";
 
 import { createClient } from "@supabase/supabase-js";
+import {
+  consumeDemoReadinessCheck,
+  createDemoEvaluationToken,
+  getDemoAllowance,
+  getDemoVisitorHash,
+} from "../../lib/server/demoUsage";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -16,13 +22,13 @@ const RATE_LIMIT_MAX_REQUESTS = 10;
 
 const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
-async function getVerifiedUser(req) {
+async function getOptionalVerifiedUser(req) {
   const authHeader = Array.isArray(req.headers.authorization)
     ? req.headers.authorization[0]
     : req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
-    throw new Error("Missing Supabase access token");
+    return null;
   }
 
   const accessToken = authHeader.slice("Bearer ".length);
@@ -103,7 +109,7 @@ export default async function handler(req, res) {
       backers,
       partners,
     } = req.body ?? {};
-    const verifiedUser = await getVerifiedUser(req);
+    const verifiedUser = await getOptionalVerifiedUser(req);
 
     const cleanAnnouncement = cleanRequiredString(
       announcement,
@@ -134,10 +140,22 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: contextError });
     }
 
-    const rateLimitError = checkRateLimit(verifiedUser.id);
+    const demoIpHash = verifiedUser ? null : getDemoVisitorHash(req);
+    const rateLimitError = checkRateLimit(verifiedUser?.id ?? `demo:${demoIpHash}`);
 
     if (rateLimitError) {
       return res.status(429).json({ error: rateLimitError });
+    }
+
+    if (demoIpHash) {
+      const demoAllowance = await getDemoAllowance(supabase, demoIpHash);
+
+      if (demoAllowance.remainingChecks <= 0) {
+        return res.status(403).json({
+          error: "Free demo evaluation limit reached",
+          ...demoAllowance,
+        });
+      }
     }
 
     // Optional fields: keep them safe and predictable
@@ -337,10 +355,44 @@ const next_actions = Array.isArray(parsed?.recommendation?.next_actions)
   ? parsed.recommendation.next_actions.map(String).slice(0, 3)
   : [];
 
+const evaluationResponse = {
+  verdict,
+  risk_score,
+  risk_breakdown,
+  primary_failure_modes,
+  journalist_reaction,
+  recommendation: {
+    summary: recommendation_summary,
+    next_actions,
+  }
+};
+
+if (!verifiedUser && demoIpHash) {
+  const demoAllowance = await consumeDemoReadinessCheck(supabase, demoIpHash);
+
+  if (!demoAllowance) {
+    const currentAllowance = await getDemoAllowance(supabase, demoIpHash);
+    return res.status(403).json({
+      error: "Free demo evaluation limit reached",
+      ...currentAllowance,
+    });
+  }
+
+  return res.status(200).json({
+    ...evaluationResponse,
+    demoEvaluationToken: createDemoEvaluationToken(
+      demoIpHash,
+      cleanAnnouncement.value,
+      verdict
+    ),
+    ...demoAllowance,
+  });
+}
+
 const { data: insertedEvaluation, error: insertError } = await supabase
   .from("evaluations")
   .insert({
-    user_id: verifiedUser.id,
+    user_id: verifiedUser!.id,
     announcement: cleanAnnouncement.value,
     market: ctx.market,
     partners: ctx.partners,
@@ -372,23 +424,11 @@ if (!insertedEvaluation?.id) {
 
 return res.status(200).json({
   id: insertedEvaluation.id,
-  verdict,
-  risk_score,
-  risk_breakdown,
-  primary_failure_modes,
-  journalist_reaction,
-  recommendation: {
-    summary: recommendation_summary,
-    next_actions,
-  }
+  ...evaluationResponse,
 });
 
 
   } catch (err) {
-    if (err instanceof Error && err.message === "Missing Supabase access token") {
-      return res.status(401).json({ error: "Authentication required" });
-    }
-
     if (err instanceof Error && err.message === "Invalid Supabase access token") {
       return res.status(401).json({ error: "Invalid Supabase access token" });
     }

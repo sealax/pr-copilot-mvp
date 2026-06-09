@@ -1,6 +1,6 @@
 import type { HTMLAttributes } from "react";
 
-type CardElement = "div" | "section" | "aside";
+type CardElement = "div" | "section" | "aside" | "article";
 
 type CardProps = HTMLAttributes<HTMLElement> & {
   as?: CardElement;

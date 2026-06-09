@@ -152,15 +152,27 @@ OPENAI_API_KEY=your_openai_api_key
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+DEMO_USAGE_SALT=your_long_random_demo_usage_salt
 ```
 
-### 4. Start the local dev server
+Generate the demo salt with a cryptographically secure tool, for example:
+
+```bash
+openssl rand -hex 32
+```
+
+### 4. Apply Supabase migrations
+
+Apply the SQL files in `supabase/migrations` to the configured Supabase project.
+Anonymous demo mode requires the `demo_usage` table and its usage functions.
+
+### 5. Start the local dev server
 
 ```bash
 npm run dev
 ```
 
-### 5. Open the app
+### 6. Open the app
 
 ```text
 http://localhost:3000
