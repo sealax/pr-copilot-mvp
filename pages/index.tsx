@@ -1,9 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { createClient } from '@supabase/supabase-js';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { PageContainer } from '../components/ui/PageContainer';
+import {
+  clearPendingDemoResult,
+  readPendingDemoResult,
+  writePendingDemoResult,
+  type PendingDemoResult,
+} from '../lib/demoResult';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -27,6 +33,11 @@ export default function Home() {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedOutput, setCopiedOutput] = useState(false);
+  const [demoSaveNotice, setDemoSaveNotice] = useState<{
+    type: "success" | "warning";
+    message: string;
+  } | null>(null);
+  const demoImportInFlight = useRef(false);
 
   const [market, setMarket] = useState("Fintech compliance");
   const [funding, setFunding] = useState("$3M seed");
@@ -62,10 +73,101 @@ const fetchHistory = async () => {
     setHistory(Array.isArray(data.history) ? data.history : []);
   };
 
+const createImportId = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+};
+
+const persistDemoResult = (
+  evaluation: any,
+  draft?: string,
+  existingImportId?: string
+) => {
+  const result: PendingDemoResult = {
+    version: 1,
+    importId: existingImportId || createImportId(),
+    source: "anonymous_demo",
+    timestamp: new Date().toISOString(),
+    announcement: prompt,
+    market,
+    partners,
+    funding,
+    evaluation: {
+      verdict: evaluation.verdict,
+      risk_score: evaluation.risk_score,
+      risk_breakdown: evaluation.risk_breakdown,
+      primary_failure_modes: evaluation.primary_failure_modes,
+      journalist_reaction: evaluation.journalist_reaction,
+      recommendation: evaluation.recommendation,
+    },
+    ...(draft ? { draft } : {}),
+  };
+
+  try {
+    writePendingDemoResult(result);
+    return result;
+  } catch (error) {
+    console.error("Could not preserve demo result:", error);
+    setDemoSaveNotice({
+      type: "warning",
+      message: "Your demo result could not be prepared for account saving in this browser.",
+    });
+    return null;
+  }
+};
+
 useEffect(() => {
   if (!user) return;
 
   fetchHistory();
+}, [user]);
+
+useEffect(() => {
+  if (!user || demoImportInFlight.current) return;
+
+  const pendingResult = readPendingDemoResult();
+
+  if (!pendingResult) return;
+
+  demoImportInFlight.current = true;
+
+  const importDemoResult = async () => {
+    try {
+      const headers = await getApiHeaders(true);
+      const res = await fetch("/api/import-demo", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(pendingResult),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data?.saved) {
+        throw new Error(data?.error ?? "Could not save demo result");
+      }
+
+      clearPendingDemoResult(pendingResult.importId);
+      setDemoSaveNotice({
+        type: "success",
+        message: "Your demo result has been saved to your account.",
+      });
+      await fetchHistory();
+    } catch (error) {
+      console.error("Demo result import failed:", error);
+      setDemoSaveNotice({
+        type: "warning",
+        message: "We could not save your demo result yet. Your account is ready and we will retry after refresh.",
+      });
+    } finally {
+      demoImportInFlight.current = false;
+    }
+  };
+
+  importDemoResult();
 }, [user]);
 
 const login = async (provider: "github" | "google") => {
@@ -162,6 +264,7 @@ useEffect(() => {
 }, [user, authReady]);
 
   const handleEvaluate = async () => {
+  if (!authReady) return;
   if (!prompt.trim()) return alert("Add your announcement first");
   if (!user && remainingDemoChecks <= 0) {
     return alert("You've used both free demo evaluations. Create a free account to continue.");
@@ -210,7 +313,20 @@ useEffect(() => {
         return alert("Evaluation could not be saved. Please try again before generating a press release.");
       }
 
-      setEvalData(data);
+      let nextEvalData = data;
+
+      if (!user) {
+        const pendingResult = persistDemoResult(data);
+
+        if (pendingResult) {
+          nextEvalData = {
+            ...data,
+            demoImportId: pendingResult.importId,
+          };
+        }
+      }
+
+      setEvalData(nextEvalData);
       setVerdict(data.verdict ?? "");
       if (typeof data.remainingChecks === "number") {
         setRemainingDemoChecks(data.remainingChecks);
@@ -232,6 +348,7 @@ useEffect(() => {
   };
 
   const handleSubmit = async () => {
+    if (!authReady) return;
     if (!evalData) return alert("Run PR Readiness Check first");
     if (!(verdict === "GO" || verdict === "CONDITIONAL")) {
       return alert("PR Readiness Verdict is NO-GO. Generation is blocked.");
@@ -282,6 +399,13 @@ useEffect(() => {
     }
 
     setOutput(data.response);
+    if (!user) {
+      persistDemoResult(
+        evalData,
+        data.response,
+        evalData?.demoImportId
+      );
+    }
     if (typeof data.remaining_generations === "number") {
       setRemainingGenerations(data.remaining_generations);
     }
@@ -685,6 +809,21 @@ useEffect(() => {
         </PageContainer>
       )}
 
+      {demoSaveNotice && (
+        <PageContainer>
+          <div className={`demo-save-notice ${demoSaveNotice.type}`} role="status">
+            <span>{demoSaveNotice.message}</span>
+            <button
+              type="button"
+              aria-label="Dismiss message"
+              onClick={() => setDemoSaveNotice(null)}
+            >
+              Close
+            </button>
+          </div>
+        </PageContainer>
+      )}
+
       <PageContainer className="workbench" id="workspace">
         <div className="primary-column">
           {authReady && demoLimitReached && (
@@ -754,7 +893,7 @@ useEffect(() => {
             <div className="action-row">
               <Button
                 onClick={handleEvaluate}
-                disabled={isEvaluating || (!user && remainingDemoChecks <= 0)}
+                disabled={!authReady || isEvaluating || (!user && remainingDemoChecks <= 0)}
               >
                 {isEvaluating ? "Evaluating..." : "Run PR Readiness Check"}
               </Button>
@@ -825,6 +964,15 @@ useEffect(() => {
             )}
           </Card>
 
+          {!user && evalData && (
+            <div className="demo-result-save-prompt">
+              <strong>Create a free account to save this PR check and continue.</strong>
+              <Button size="small" onClick={() => login("google")}>
+                Create Free Account
+              </Button>
+            </div>
+          )}
+
           <Card as="section" className="panel">
             <div className="section-heading">
               <div>
@@ -845,7 +993,7 @@ useEffect(() => {
             <div className="action-row">
               <Button
                 onClick={handleSubmit}
-                disabled={isGenerating || !canGenerate}
+                disabled={!authReady || isGenerating || !canGenerate}
               >
                 {isGenerating ? "Generating..." : "Generate Press Release"}
               </Button>
@@ -860,7 +1008,7 @@ useEffect(() => {
                       {copiedOutput ? "Copied" : "Copy"}
                     </Button>
                   ) : (
-                    <span className="helper-text">Demo drafts are not saved or exportable</span>
+                    <span className="helper-text">Create an account to save this draft</span>
                   )}
                 </div>
                 <pre>{output}</pre>
