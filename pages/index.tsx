@@ -711,16 +711,21 @@ useEffect(() => {
       </section>
 
       <section className="workspace-intro">
-        <PageContainer>
-          <p className="eyebrow">Try the workflow</p>
-          <h2>Put your announcement under editorial pressure.</h2>
-          <p>Start with the facts. PR Copilot will assess readiness before any draft is generated.</p>
+        <PageContainer className="workspace-desk-heading">
+          <div>
+            <p className="eyebrow">PR readiness desk</p>
+            <h2>The confidence to know whether an announcement is worth pitching.</h2>
+          </div>
+          <p>
+            Submit the briefing note for editorial assessment. Drafting remains downstream of
+            the verdict.
+          </p>
         </PageContainer>
       </section>
 
       {authReady && !user && (
         <PageContainer>
-          <div className={`demo-banner ${remainingDemoDrafts <= 0 ? "complete" : ""}`}>
+          <div className={`demo-banner workspace-notice ${remainingDemoDrafts <= 0 ? "complete" : ""}`}>
             <div>
               <strong>{remainingDemoDrafts <= 0 ? "Demo Complete" : "Demo Mode"}</strong>
               <span>{demoStatusText}</span>
@@ -736,7 +741,7 @@ useEffect(() => {
 
       {demoSaveNotice && (
         <PageContainer>
-          <div className={`demo-save-notice ${demoSaveNotice.type}`} role="status">
+          <div className={`demo-save-notice workspace-notice ${demoSaveNotice.type}`} role="status">
             <span>{demoSaveNotice.message}</span>
             <button
               type="button"
@@ -752,7 +757,7 @@ useEffect(() => {
       <PageContainer className="workbench" id="workspace">
         <div className="primary-column">
           {authReady && demoLimitReached && (
-            <Card as="section" className="demo-signup-card">
+            <section className="demo-signup-card workspace-notice">
               <p className="eyebrow">
                 {remainingDemoDrafts <= 0 ? "Demo complete" : "Evaluation allowance used"}
               </p>
@@ -765,14 +770,14 @@ useEffect(() => {
                 <li>Build a launch history</li>
               </ul>
               <Button onClick={() => login("google")}>Create Free Account</Button>
-            </Card>
+            </section>
           )}
 
-          <Card as="section" className="panel">
-            <div className="section-heading">
+          <section className="workspace-document briefing-document">
+            <div className="document-heading">
               <div>
-                <p className="eyebrow">Step 1</p>
-                <h2>Readiness assessment</h2>
+                <p className="eyebrow">Announcement briefing</p>
+                <h2>Brief the announcement</h2>
               </div>
               <span className="subtle-status">
                 {user
@@ -788,7 +793,12 @@ useEffect(() => {
               named partners, measurable outcomes, and any constraints a journalist would question.
             </p>
 
-            <div className="field-grid">
+            <aside className="operator-note">
+              <strong>Operator note</strong>
+              <span>Specific evidence, named validation, and measurable outcomes improve the assessment.</span>
+            </aside>
+
+            <div className="field-grid briefing-metadata">
               <label>
                 <span>Market</span>
                 <input value={market} onChange={(e) => setMarket(e.target.value)} />
@@ -815,7 +825,7 @@ useEffect(() => {
               />
             </label>
 
-            <div className="action-row">
+            <div className="action-row document-action">
               <Button
                 onClick={handleEvaluate}
                 disabled={!authReady || isEvaluating || (!user && remainingDemoChecks <= 0)}
@@ -828,81 +838,88 @@ useEffect(() => {
                   : "Demo evaluations are not saved and do not appear in history."}
               </span>
             </div>
-          </Card>
+          </section>
 
-          <Card as="section" className={`panel verdict-panel ${verdictClass}`}>
-            <div className="section-heading">
+          <section className={`workspace-document editorial-review verdict-panel ${verdictClass}`}>
+            <div className="document-heading verdict-heading">
               <div>
-                <p className="eyebrow">Step 2</p>
-                <h2>Editorial judgment</h2>
+                <p className="eyebrow">Editorial verdict</p>
+                <h2 className={`verdict-word ${verdictClass}`}>{verdictLabel}</h2>
               </div>
-              <span className={`verdict-badge ${verdictClass}`}>{verdictLabel}</span>
+              <span className="document-state">
+                {isEvaluating ? "Assessment in progress" : evalData ? "Assessment complete" : "Awaiting briefing"}
+              </span>
             </div>
 
             {!evalData ? (
-              <p className="empty-state">
-                Run a readiness check to see the verdict, journalist reaction, failure modes, and next actions.
-              </p>
+              <div className="document-empty-state" role="status">
+                <span>{isEvaluating ? "Reviewing briefing" : "No assessment yet"}</span>
+                <p>
+                  {isEvaluating
+                    ? "The readiness desk is reviewing the announcement."
+                    : "Run a readiness check to see the verdict, likely editorial reception, evidence gaps, and required next actions."}
+                </p>
+              </div>
             ) : (
               <>
                 {evalData.journalist_reaction && (
-                  <div className="judgment-block">
-                    <span>Likely journalist reaction</span>
+                  <section className="document-section editorial-reception">
+                    <h3>Likely Editorial Reception</h3>
                     <p>{evalData.journalist_reaction}</p>
-                  </div>
+                  </section>
                 )}
 
                 {evalData.recommendation?.summary && (
-                  <div className="judgment-block">
-                    <span>Recommendation</span>
+                  <section className="desk-instruction">
+                    <h3>Desk recommendation</h3>
                     <p>{evalData.recommendation.summary}</p>
-                  </div>
+                  </section>
                 )}
 
-                <div className="result-grid">
+                <div className="assessment-details">
                   {Array.isArray(evalData.primary_failure_modes) &&
                     evalData.primary_failure_modes.length > 0 && (
-                      <div>
-                        <h3>Primary failure modes</h3>
+                      <section className="evidence-gaps">
+                        <h3>Evidence gaps and risks</h3>
                         <ul className="clean-list">
                           {evalData.primary_failure_modes.slice(0, 6).map((x: string, i: number) => (
                             <li key={i}>{x}</li>
                           ))}
                         </ul>
-                      </div>
+                      </section>
                     )}
 
                   {Array.isArray(evalData.recommendation?.next_actions) &&
                     evalData.recommendation.next_actions.length > 0 && (
-                      <div>
-                        <h3>Next actions</h3>
+                      <section className="required-actions">
+                        <h3>Required next actions</h3>
                         <ol className="action-list">
                           {evalData.recommendation.next_actions.slice(0, 3).map((x: string, i: number) => (
                             <li key={i}>{x}</li>
                           ))}
                         </ol>
-                      </div>
+                      </section>
                     )}
                 </div>
 
               </>
             )}
-          </Card>
+          </section>
 
           {!user && evalData && (
-            <div className="demo-result-save-prompt">
+            <aside className="demo-result-save-prompt workspace-notice">
               <strong>Create a free account to save this PR check and continue.</strong>
               <Button size="small" onClick={() => login("google")}>
                 Create Free Account
               </Button>
-            </div>
+            </aside>
           )}
 
-          <Card as="section" className="panel">
-            <div className="section-heading">
+          <section className={`workspace-document drafting-document ${verdict === "NO-GO" ? "blocked" : canGenerate ? "available" : "pending"}`}>
+            <div className="document-heading">
               <div>
-                <p className="eyebrow">Step 3</p>
-                <h2>Draft generation</h2>
+                <p className="eyebrow">Drafting stage</p>
+                <h2>Press-release draft</h2>
               </div>
               <span className="subtle-status">
                 {user
@@ -913,9 +930,20 @@ useEffect(() => {
               </span>
             </div>
 
-            <p className="section-copy">{generationStatus}</p>
+            <div className="draft-status">
+              <strong>
+                {isGenerating
+                  ? "Drafting in progress"
+                  : canGenerate
+                  ? "Ready for drafting"
+                  : verdict === "NO-GO"
+                  ? "Drafting blocked"
+                  : "Drafting unavailable"}
+              </strong>
+              <p>{generationStatus}</p>
+            </div>
 
-            <div className="action-row">
+            <div className="action-row document-action">
               <Button
                 onClick={handleSubmit}
                 disabled={!authReady || isGenerating || !canGenerate}
@@ -925,9 +953,12 @@ useEffect(() => {
             </div>
 
             {output ? (
-              <div className="output-card">
+              <article className="output-card draft-output">
                 <div className="output-header">
-                  <h3>Generated draft</h3>
+                  <div>
+                    <span>Draft document</span>
+                    <h3>Generated press release</h3>
+                  </div>
                   {user ? (
                     <Button variant="secondary" size="small" onClick={copyOutput}>
                       {copiedOutput ? "Copied" : "Copy"}
@@ -937,26 +968,27 @@ useEffect(() => {
                   )}
                 </div>
                 <pre>{output}</pre>
-              </div>
+              </article>
             ) : (
-              <p className="empty-state compact">
-                Approved or conditional evaluations can produce a draft here.
-              </p>
+              <div className="document-empty-state compact">
+                <span>No draft document</span>
+                <p>Approved or conditional evaluations can produce a draft here.</p>
+              </div>
             )}
-          </Card>
+          </section>
         </div>
 
-        <Card as="aside" className="history-panel">
-          <div className="section-heading">
+        <aside className="history-panel desk-archive">
+          <div className="archive-heading">
             <div>
-              <p className="eyebrow">Saved work</p>
+              <p className="eyebrow">Desk archive</p>
               <h2>Recent evaluations</h2>
             </div>
           </div>
 
           {authReady && !user ? (
             <div className="anonymous-history-gate">
-              <p className="empty-state compact">
+              <p className="archive-empty-state">
                 Create a free account to save PR evaluations, generate additional drafts, and build a launch history.
               </p>
               <Button size="small" onClick={() => login("google")}>
@@ -964,7 +996,7 @@ useEffect(() => {
               </Button>
             </div>
           ) : user && history.length === 0 ? (
-            <p className="empty-state compact">
+            <p className="archive-empty-state">
               No saved evaluations yet. Completed checks will appear here.
             </p>
           ) : null}
@@ -989,8 +1021,19 @@ useEffect(() => {
                   setOutput(item.latest_generation?.output ?? "");
                 }}
               >
-                <span className={`mini-verdict ${item.verdict === "GO" ? "go" : item.verdict === "CONDITIONAL" ? "conditional" : "nogo"}`}>
-                  {item.verdict}
+                <span className="history-item-topline">
+                  <span className={`mini-verdict ${item.verdict === "GO" ? "go" : item.verdict === "CONDITIONAL" ? "conditional" : "nogo"}`}>
+                    {item.verdict}
+                  </span>
+                  {item.created_at && (
+                    <time dateTime={item.created_at}>
+                      {new Date(item.created_at).toLocaleDateString(undefined, {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </time>
+                  )}
                 </span>
                 <span className="history-title">{item.announcement?.slice(0, 86)}...</span>
                 <span className="history-meta">
@@ -999,7 +1042,7 @@ useEffect(() => {
               </button>
             ))}
           </div>}
-        </Card>
+        </aside>
       </PageContainer>
 
       <section className="pricing-section" id="pricing" aria-labelledby="pricing-heading">
