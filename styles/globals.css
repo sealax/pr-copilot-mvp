@@ -1,32 +1,32 @@
 :root {
-  --color-canvas: #f7f7f5;
-  --color-surface: #ffffff;
-  --color-surface-subtle: #f1f1ee;
-  --color-surface-raised: rgba(255, 255, 255, 0.94);
-  --color-ink: #171816;
-  --color-ink-soft: #41433f;
-  --color-muted: #74766f;
-  --color-border: #dedfd9;
-  --color-border-strong: #c9cbc3;
-  --color-accent: #173f35;
-  --color-accent-hover: #0e3028;
-  --color-accent-soft: #e4eee9;
-  --color-focus: rgba(23, 63, 53, 0.17);
-  --color-success: #27624d;
-  --color-success-soft: #e1efe8;
-  --color-warning: #805f16;
-  --color-warning-soft: #f4ead1;
-  --color-danger: #8a3933;
-  --color-danger-soft: #f3dfdc;
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  --color-canvas: #f3f0e8;
+  --color-surface: #fbfaf6;
+  --color-surface-subtle: #ebe7dc;
+  --color-surface-raised: #fbfaf6;
+  --color-ink: #171914;
+  --color-ink-soft: #45473f;
+  --color-muted: #706f67;
+  --color-border: #d9d4c8;
+  --color-border-strong: #c5bfb2;
+  --color-accent: #123d32;
+  --color-accent-hover: #0c3027;
+  --color-accent-soft: #e1e9e3;
+  --color-focus: rgba(18, 61, 50, 0.18);
+  --color-success: #245642;
+  --color-success-soft: #dfe9e2;
+  --color-warning: #936619;
+  --color-warning-soft: #f0e4c9;
+  --color-danger: #86362f;
+  --color-danger-soft: #efddd8;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Newsreader", Georgia, "Times New Roman", serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --text-xs: 0.75rem;
   --text-sm: 0.8125rem;
   --text-base: 0.9375rem;
   --text-lg: 1.0625rem;
   --text-xl: 1.375rem;
-  --text-display: clamp(2.5rem, 6vw, 4.75rem);
+  --text-display: clamp(2.5rem, 5vw, 4.125rem);
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -37,12 +37,12 @@
   --space-10: 2.5rem;
   --space-12: 3rem;
   --space-16: 4rem;
-  --radius-sm: 10px;
-  --radius-md: 16px;
-  --radius-lg: 22px;
-  --shadow-card: 0 1px 2px rgba(20, 25, 22, 0.03), 0 18px 50px rgba(20, 25, 22, 0.055);
-  --shadow-hover: 0 1px 2px rgba(20, 25, 22, 0.04), 0 20px 45px rgba(20, 25, 22, 0.09);
-  --container-width: 1240px;
+  --radius-sm: 4px;
+  --radius-md: 7px;
+  --radius-lg: 10px;
+  --shadow-card: 0 1px 2px rgba(23, 25, 20, 0.035);
+  --shadow-hover: 0 2px 8px rgba(23, 25, 20, 0.055);
+  --container-width: 1200px;
 }
 
 * {
@@ -55,9 +55,7 @@ html {
 
 body {
   margin: 0;
-  background:
-    radial-gradient(circle at 8% 0%, rgba(255, 255, 255, 0.95), transparent 31rem),
-    var(--color-canvas);
+  background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -98,9 +96,8 @@ button {
 .marketing-nav {
   position: relative;
   z-index: 10;
-  border-bottom: 1px solid rgba(201, 203, 195, 0.72);
-  background: rgba(247, 247, 245, 0.88);
-  backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--color-border);
+  background: rgba(243, 240, 232, 0.96);
 }
 
 .marketing-nav-inner {
@@ -124,7 +121,7 @@ button {
 .wordmark-mark {
   width: 34px;
   height: 34px;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -174,7 +171,7 @@ button {
 .hero-section {
   position: relative;
   overflow: hidden;
-  padding: clamp(84px, 11vw, 148px) 0 clamp(78px, 10vw, 132px);
+  padding: clamp(68px, 8vw, 108px) 0 clamp(64px, 8vw, 104px);
 }
 
 .hero-section::before {
@@ -185,8 +182,7 @@ button {
   top: -390px;
   right: -220px;
   border-radius: 50%;
-  background: rgba(228, 238, 233, 0.72);
-  filter: blur(2px);
+  background: rgba(225, 233, 227, 0.58);
   pointer-events: none;
 }
 
@@ -200,16 +196,18 @@ button {
 
 .hero-copy h1 {
   max-width: 780px;
-  font-size: clamp(3.1rem, 5.2vw, 4.8rem);
-  line-height: 0.98;
+  font-size: clamp(2.9rem, 4.6vw, 4.125rem);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.01;
 }
 
 .hero-description {
   max-width: 700px;
   margin: var(--space-8) 0 0;
   color: var(--color-ink-soft);
-  font-size: clamp(1.15rem, 2vw, 1.4rem);
-  letter-spacing: -0.025em;
+  font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+  letter-spacing: -0.015em;
   line-height: 1.55;
 }
 
@@ -229,7 +227,7 @@ button {
 
 .hero-evaluation {
   padding: clamp(26px, 4vw, 38px);
-  transform: rotate(1.25deg);
+  transform: rotate(0.4deg);
 }
 
 .hero-card-header {
@@ -243,7 +241,7 @@ button {
 
 .hero-card-header h2 {
   max-width: 260px;
-  font-size: 1.2rem;
+  font-size: 1.35rem;
 }
 
 .signal-list {
@@ -277,7 +275,7 @@ button {
 .hero-recommendation {
   margin-top: var(--space-6);
   padding: var(--space-5);
-  border-radius: var(--radius-md);
+  border-left: 2px solid var(--color-accent);
   background: var(--color-accent-soft);
 }
 
@@ -294,7 +292,7 @@ button {
 .comparison-section,
 .pricing-section,
 .faq-section {
-  padding: clamp(76px, 10vw, 128px) 0;
+  padding: clamp(62px, 8vw, 96px) 0;
 }
 
 .workflow-section {
@@ -314,9 +312,10 @@ button {
 .workspace-intro h2,
 .faq-layout > div > h2 {
   max-width: 760px;
-  font-size: clamp(2.25rem, 5vw, 4.25rem);
-  letter-spacing: -0.05em;
-  line-height: 1.02;
+  font-size: clamp(2.1rem, 4vw, 3.5rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.06;
 }
 
 .marketing-section-heading > p {
@@ -372,7 +371,7 @@ button {
 }
 
 .features-section {
-  background: #eeefeb;
+  background: var(--color-surface-subtle);
 }
 
 .compact-heading {
@@ -471,9 +470,10 @@ button {
 }
 
 .comparison-intro h2 {
-  font-size: clamp(2.25rem, 4.6vw, 4rem);
-  letter-spacing: -0.05em;
-  line-height: 1.02;
+  font-size: clamp(2.1rem, 3.8vw, 3.35rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.06;
 }
 
 .comparison-intro > p:last-child {
@@ -523,7 +523,7 @@ button {
 }
 
 .pricing-section {
-  background: #eeefeb;
+  background: var(--color-surface-subtle);
   scroll-margin-top: var(--space-6);
 }
 
@@ -543,7 +543,7 @@ button {
 
 .pricing-card-featured {
   border-color: var(--color-accent);
-  box-shadow: 0 1px 2px rgba(20, 25, 22, 0.04), 0 24px 60px rgba(23, 63, 53, 0.13);
+  box-shadow: 0 1px 3px rgba(18, 61, 50, 0.08);
 }
 
 .pricing-card-topline {
@@ -554,7 +554,7 @@ button {
 }
 
 .pricing-card-topline > span {
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   padding: 6px 9px;
   background: var(--color-accent-soft);
   color: var(--color-accent);
@@ -584,8 +584,9 @@ button {
 
 .pricing-price strong {
   font-family: var(--font-display);
-  font-size: clamp(2.7rem, 4vw, 3.6rem);
-  letter-spacing: -0.06em;
+  font-size: clamp(2.5rem, 3.6vw, 3.25rem);
+  font-weight: 600;
+  letter-spacing: -0.035em;
   line-height: 1;
 }
 
@@ -635,7 +636,7 @@ button {
 }
 
 .workspace-intro {
-  padding: clamp(76px, 10vw, 120px) 0 var(--space-10);
+  padding: clamp(62px, 8vw, 92px) 0 var(--space-10);
 }
 
 .workspace-intro p:last-child {
@@ -796,18 +797,18 @@ h1 {
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--text-display);
-  font-weight: 700;
-  letter-spacing: -0.055em;
-  line-height: 0.96;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
 }
 
 h2 {
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--text-xl);
-  font-weight: 680;
-  letter-spacing: -0.025em;
-  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+  line-height: 1.18;
 }
 
 h3 {
@@ -961,7 +962,7 @@ textarea:hover {
 input:focus,
 textarea:focus {
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 4px var(--color-focus);
+  box-shadow: 0 0 0 3px var(--color-focus);
 }
 
 .action-row {
@@ -984,16 +985,16 @@ textarea:focus {
   font-weight: 700;
   letter-spacing: -0.01em;
   cursor: pointer;
-  transition: transform 150ms ease, background 150ms ease, border-color 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+  transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
 }
 
 .button:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 4px var(--color-focus);
+  box-shadow: 0 0 0 3px var(--color-focus);
 }
 
 .button:disabled {
@@ -1004,12 +1005,12 @@ textarea:focus {
 .button-primary {
   background: var(--color-accent);
   color: #ffffff;
-  box-shadow: 0 6px 14px rgba(23, 63, 53, 0.16);
+  box-shadow: none;
 }
 
 .button-primary:hover:not(:disabled) {
   background: var(--color-accent-hover);
-  box-shadow: 0 8px 18px rgba(23, 63, 53, 0.2);
+  box-shadow: none;
 }
 
 .button-secondary {
@@ -1063,12 +1064,13 @@ textarea:focus {
 
 .verdict-badge,
 .mini-verdict {
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   padding: 7px 11px;
   font-size: var(--text-xs);
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.055em;
   line-height: 1;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -1098,7 +1100,7 @@ textarea:focus {
 .judgment-block {
   padding: var(--space-5);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-left: 2px solid var(--color-border-strong);
   background: var(--color-surface-subtle);
   margin-bottom: var(--space-4);
 }
@@ -1215,18 +1217,18 @@ pre {
   cursor: pointer;
   display: grid;
   gap: var(--space-3);
-  transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
 }
 
 .history-item:hover {
   border-color: var(--color-border-strong);
-  transform: translateY(-1px);
-  box-shadow: var(--shadow-hover);
+  background: var(--color-surface-subtle);
+  box-shadow: none;
 }
 
 .history-item:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 4px var(--color-focus);
+  box-shadow: 0 0 0 3px var(--color-focus);
 }
 
 .history-title {
@@ -1242,7 +1244,7 @@ pre {
 }
 
 .faq-section {
-  margin-top: clamp(76px, 10vw, 128px);
+  margin-top: clamp(62px, 8vw, 96px);
   background: var(--color-surface);
 }
 
@@ -1427,7 +1429,7 @@ pre {
   }
 
   .hero-copy h1 {
-    font-size: clamp(2.65rem, 12vw, 3.65rem);
+    font-size: clamp(2.25rem, 10vw, 2.75rem);
   }
 
   .hero-actions {
