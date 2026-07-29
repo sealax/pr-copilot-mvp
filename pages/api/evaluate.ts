@@ -7,6 +7,7 @@ import {
   getDemoAllowance,
   getDemoVisitorHash,
 } from "../../lib/server/demoUsage";
+import { isAdminUser } from "../../lib/server/admin";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -110,6 +111,7 @@ export default async function handler(req, res) {
       partners,
     } = req.body ?? {};
     const verifiedUser = await getOptionalVerifiedUser(req);
+    const adminUser = isAdminUser(verifiedUser);
 
     const cleanAnnouncement = cleanRequiredString(
       announcement,
@@ -141,7 +143,9 @@ export default async function handler(req, res) {
     }
 
     const demoIpHash = verifiedUser ? null : getDemoVisitorHash(req);
-    const rateLimitError = checkRateLimit(verifiedUser?.id ?? `demo:${demoIpHash}`);
+    const rateLimitError = adminUser
+      ? null
+      : checkRateLimit(verifiedUser?.id ?? `demo:${demoIpHash}`);
 
     if (rateLimitError) {
       return res.status(429).json({ error: rateLimitError });

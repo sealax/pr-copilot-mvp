@@ -7,6 +7,7 @@ import {
   getDemoVisitorHash,
   verifyDemoEvaluationToken,
 } from "../../lib/server/demoUsage";
+import { ADMIN_USAGE_SENTINEL, isAdminUser } from "../../lib/server/admin";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -86,6 +87,7 @@ export default async function handler(req, res) {
 
     const { prompt, evaluation_id, demoEvaluationToken } = req.body;
     const verifiedUser = await getOptionalVerifiedUser(req);
+    const adminUser = isAdminUser(verifiedUser);
 
     const cleanPrompt = cleanRequiredString(prompt, "prompt", MAX_PROMPT_LENGTH);
 
@@ -94,7 +96,9 @@ export default async function handler(req, res) {
     }
 
     const demoIpHash = verifiedUser ? null : getDemoVisitorHash(req);
-    const rateLimitError = checkRateLimit(verifiedUser?.id ?? `demo:${demoIpHash}`);
+    const rateLimitError = adminUser
+      ? null
+      : checkRateLimit(verifiedUser?.id ?? `demo:${demoIpHash}`);
 
     if (rateLimitError) {
       return res.status(429).json({ error: rateLimitError });
@@ -143,24 +147,26 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: cleanEvaluationId.error });
       }
 
-      const { count, error: usageError } = await supabase
-        .from("generations")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", verifiedUser.id);
+      if (!adminUser) {
+        const { count, error: usageError } = await supabase
+          .from("generations")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", verifiedUser.id);
 
-      if (usageError || typeof count !== "number") {
-        console.error("Supabase usage count error:", usageError);
-        return res.status(500).json({ error: "Could not check generation usage" });
-      }
+        if (usageError || typeof count !== "number") {
+          console.error("Supabase usage count error:", usageError);
+          return res.status(500).json({ error: "Could not check generation usage" });
+        }
 
-      generationsUsed = count;
+        generationsUsed = count;
 
-      if (generationsUsed >= FREE_GENERATION_LIMIT) {
-        return res.status(403).json({
-          error: "Free generation limit reached",
-          generations_used: generationsUsed,
-          remaining_generations: 0,
-        });
+        if (generationsUsed >= FREE_GENERATION_LIMIT) {
+          return res.status(403).json({
+            error: "Free generation limit reached",
+            generations_used: generationsUsed,
+            remaining_generations: 0,
+          });
+        }
       }
 
       evaluationId = cleanEvaluationId.value;
@@ -251,13 +257,17 @@ ${cleanPrompt.value}`;
       return res.status(500).json({ error: "Could not save generation" });
     }
 
-    const nextGenerationsUsed = (generationsUsed ?? 0) + 1;
+    const nextGenerationsUsed = adminUser
+      ? 0
+      : (generationsUsed ?? 0) + 1;
 
     return res.status(200).json({
       response: text,
       generation_id: data.id,
       generations_used: nextGenerationsUsed,
-      remaining_generations: Math.max(0, FREE_GENERATION_LIMIT - nextGenerationsUsed),
+      remaining_generations: adminUser
+        ? ADMIN_USAGE_SENTINEL
+        : Math.max(0, FREE_GENERATION_LIMIT - nextGenerationsUsed),
     });
 
   } catch (err) {
