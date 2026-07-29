@@ -13,7 +13,6 @@ import {
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const ADMIN_USAGE_SENTINEL = -1;
 
 const supabase =
   supabaseUrl && supabaseAnonKey
@@ -25,6 +24,7 @@ export default function Home() {
   const [output, setOutput] = useState('');
   const [user, setUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [remainingGenerations, setRemainingGenerations] = useState<number | null>(null);
   const [generationLimit, setGenerationLimit] = useState(5);
   const [remainingDemoChecks, setRemainingDemoChecks] = useState(2);
@@ -208,6 +208,7 @@ const logout = async () => {
   setVerdict("");
   setPrompt("");
   setOutput("");
+  setIsAdmin(false);
   setRemainingGenerations(null);
 };
 
@@ -243,6 +244,7 @@ const fetchUsage = async () => {
   }
 
   if (data.demo) {
+    setIsAdmin(false);
     setRemainingDemoChecks(
       typeof data.remainingChecks === "number" ? data.remainingChecks : 2
     );
@@ -252,6 +254,14 @@ const fetchUsage = async () => {
     return;
   }
 
+  setIsAdmin(data.isAdmin === true);
+  console.info("[admin-usage-diagnostic]", {
+    adminConfigPresent: data.adminConfigPresent === true,
+    isAdmin: data.isAdmin === true,
+    ...(typeof data.authenticatedEmail === "string"
+      ? { authenticatedEmail: data.authenticatedEmail }
+      : {}),
+  });
   setRemainingGenerations(
     typeof data.remaining_generations === "number" ? data.remaining_generations : null
   );
@@ -264,11 +274,7 @@ useEffect(() => {
   fetchUsage().catch((e) => console.error("Usage fetch failed:", e));
 }, [user, authReady]);
 
-  const isAdminMode = Boolean(
-    user &&
-      (remainingGenerations === ADMIN_USAGE_SENTINEL ||
-        generationLimit === ADMIN_USAGE_SENTINEL)
-  );
+  const isAdminMode = Boolean(user && isAdmin);
 
   const handleEvaluate = async () => {
   if (!authReady) return;

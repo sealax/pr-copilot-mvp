@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { getDemoAllowance, getDemoVisitorHash } from "../../lib/server/demoUsage";
-import { ADMIN_USAGE_SENTINEL, isAdminUser } from "../../lib/server/admin";
+import {
+  ADMIN_USAGE_SENTINEL,
+  isAdminConfigPresent,
+  isAdminUser,
+  normalizeAdminEmail,
+} from "../../lib/server/admin";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,11 +53,27 @@ export default async function handler(req, res) {
       });
     }
 
-    if (isAdminUser(verifiedUser)) {
+    const adminConfigPresent = isAdminConfigPresent();
+    const authenticatedEmail = normalizeAdminEmail(verifiedUser.email);
+    const isAdmin = isAdminUser(verifiedUser);
+    const adminDiagnostics = {
+      adminConfigPresent,
+      isAdmin,
+      ...(process.env.NODE_ENV !== "production" ? { authenticatedEmail } : {}),
+    };
+
+    console.info("[admin-usage-diagnostic]", {
+      adminConfigPresent,
+      authenticatedEmail,
+      isAdmin,
+    });
+
+    if (isAdmin) {
       return res.status(200).json({
         generations_used: 0,
         remaining_generations: ADMIN_USAGE_SENTINEL,
         generation_limit: ADMIN_USAGE_SENTINEL,
+        ...adminDiagnostics,
       });
     }
 
@@ -70,6 +91,7 @@ export default async function handler(req, res) {
       generations_used: generationsUsed,
       remaining_generations: Math.max(0, FREE_GENERATION_LIMIT - generationsUsed),
       generation_limit: FREE_GENERATION_LIMIT,
+      ...adminDiagnostics,
     });
   } catch (err) {
     if (err instanceof Error && err.message === "Invalid Supabase access token") {

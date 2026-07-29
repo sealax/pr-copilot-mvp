@@ -7,7 +7,11 @@ import {
   getDemoAllowance,
   getDemoVisitorHash,
 } from "../../lib/server/demoUsage";
-import { isAdminUser } from "../../lib/server/admin";
+import {
+  isAdminConfigPresent,
+  isAdminUser,
+  normalizeAdminEmail,
+} from "../../lib/server/admin";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -112,6 +116,12 @@ export default async function handler(req, res) {
     } = req.body ?? {};
     const verifiedUser = await getOptionalVerifiedUser(req);
     const adminUser = isAdminUser(verifiedUser);
+
+    console.info("[admin-evaluate-diagnostic]", {
+      adminConfigPresent: isAdminConfigPresent(),
+      authenticatedEmail: normalizeAdminEmail(verifiedUser?.email),
+      isAdmin: adminUser,
+    });
 
     const cleanAnnouncement = cleanRequiredString(
       announcement,

@@ -7,7 +7,12 @@ import {
   getDemoVisitorHash,
   verifyDemoEvaluationToken,
 } from "../../lib/server/demoUsage";
-import { ADMIN_USAGE_SENTINEL, isAdminUser } from "../../lib/server/admin";
+import {
+  ADMIN_USAGE_SENTINEL,
+  isAdminConfigPresent,
+  isAdminUser,
+  normalizeAdminEmail,
+} from "../../lib/server/admin";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -88,6 +93,12 @@ export default async function handler(req, res) {
     const { prompt, evaluation_id, demoEvaluationToken } = req.body;
     const verifiedUser = await getOptionalVerifiedUser(req);
     const adminUser = isAdminUser(verifiedUser);
+
+    console.info("[admin-generate-diagnostic]", {
+      adminConfigPresent: isAdminConfigPresent(),
+      authenticatedEmail: normalizeAdminEmail(verifiedUser?.email),
+      isAdmin: adminUser,
+    });
 
     const cleanPrompt = cleanRequiredString(prompt, "prompt", MAX_PROMPT_LENGTH);
 
