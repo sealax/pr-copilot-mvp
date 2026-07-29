@@ -487,7 +487,10 @@ useEffect(() => {
         <PageContainer className="marketing-nav-inner">
           <a className="wordmark" href="#top" aria-label="PR Copilot home">
             <span className="wordmark-mark">PR</span>
-            <span>PR Copilot</span>
+            <span className="wordmark-copy">
+              <strong>PR Copilot</strong>
+              <small>Readiness desk</small>
+            </span>
           </a>
 
           <div className="nav-links">
@@ -522,14 +525,13 @@ useEffect(() => {
       <section className="hero-section" id="top">
         <PageContainer className="hero-grid">
           <div className="hero-copy">
-            <p className="eyebrow">Editorial judgment before amplification</p>
+            <p className="eyebrow">The PR readiness desk</p>
             <h1>
-              PR Copilot helps founders and comms teams test whether a story is newsworthy,
-              improve the angle, and generate press-ready pitches.
+              Test the story before you ask the market to care.
             </h1>
             <p className="hero-description">
-              Put the announcement under editorial pressure before you spend time drafting,
-              pitching, or asking journalists to care.
+              PR Copilot gives founders and comms teams a clear editorial verdict, exposes
+              evidence gaps, and releases drafting only when the announcement is ready.
             </p>
             <div className="hero-actions">
               <a className="button button-primary" href="#workspace">
@@ -540,14 +542,14 @@ useEffect(() => {
               </Button>
             </div>
             <p className="hero-note">
-              Structured PR assessment. Clear next actions. Drafting only when the story is ready.
+              A structured assessment from brief to verdict to press-release draft.
             </p>
           </div>
 
           <Card className="hero-evaluation">
             <div className="hero-card-header">
               <div>
-                <p className="eyebrow">Sample readiness view</p>
+                <p className="eyebrow">Sample desk review</p>
                 <h2>Series A expansion announcement</h2>
               </div>
               <span className="verdict-badge conditional">Conditional</span>
@@ -569,7 +571,7 @@ useEffect(() => {
             </div>
 
             <div className="hero-recommendation">
-              <span>Operator recommendation</span>
+              <span>Desk recommendation</span>
               <p>Strengthen the proof point and lead with what changes for the market, not the funding event.</p>
             </div>
           </Card>
@@ -578,97 +580,91 @@ useEffect(() => {
 
       <section className="workflow-section" id="how-it-works">
         <PageContainer>
-          <div className="marketing-section-heading">
-            <div>
-              <p className="eyebrow">A disciplined workflow</p>
-              <h2>Evaluation comes before generation.</h2>
+          <div className="process-index">
+            <div className="process-index-intro">
+              <p className="eyebrow">The operating sequence</p>
+              <h2>Judgment first. Drafting second.</h2>
             </div>
-            <p>
-              PR Copilot applies editorial pressure before it writes. Weak announcements are challenged,
-              viable stories are improved, and drafting stays gated by the verdict.
-            </p>
-          </div>
-
-          <div className="workflow-steps">
-            <article>
-              <span>01</span>
-              <h3>Brief the announcement</h3>
-              <p>Add the market context, proof points, partners, funding, and the claim you want to make.</p>
-            </article>
-            <article>
-              <span>02</span>
-              <h3>Get an editorial verdict</h3>
-              <p>See the likely journalist reaction, primary failure modes, and concrete next actions.</p>
-            </article>
-            <article>
-              <span>03</span>
-              <h3>Draft only when ready</h3>
-              <p>GO and CONDITIONAL evaluations can move into generation. NO-GO announcements cannot.</p>
-            </article>
+            <ol className="process-index-list">
+              <li>
+                <span>01</span>
+                <strong>Brief</strong>
+                <small>Set out the claim and supporting evidence.</small>
+              </li>
+              <li>
+                <span>02</span>
+                <strong>Verdict</strong>
+                <small>Test news value, proof, and likely journalist reaction.</small>
+              </li>
+              <li>
+                <span>03</span>
+                <strong>Draft</strong>
+                <small>Proceed only on a GO or CONDITIONAL judgment.</small>
+              </li>
+            </ol>
           </div>
         </PageContainer>
       </section>
 
       <section className="features-section" id="features">
         <PageContainer>
-          <div className="marketing-section-heading compact-heading">
-            <div>
-              <p className="eyebrow">Built for better PR decisions</p>
-              <h2>From raw announcement to credible media angle.</h2>
-            </div>
+          <div className="capabilities-heading">
+            <p className="eyebrow">What the desk delivers</p>
+            <h2>PR judgment with a working route forward.</h2>
+            <p>
+              The product separates the decision to pursue coverage from the work of drafting
+              the announcement.
+            </p>
           </div>
 
-          <div className="feature-grid">
-            <Card as="article" className="feature-card">
-              <span className="feature-index">01</span>
+          <div className="capabilities-layout">
+            <article className="capability-lead">
+              <span className="feature-index">Core assessment</span>
               <h3>PR readiness evaluation</h3>
-              <p>Test the strength, evidence, relevance, and timing of an announcement before outreach begins.</p>
-            </Card>
-            <Card as="article" className="feature-card">
-              <span className="feature-index">02</span>
-              <h3>Media angle generation</h3>
-              <p>Identify the strongest editorial frame instead of defaulting to company-centric messaging.</p>
-            </Card>
-            <Card as="article" className="feature-card">
-              <span className="feature-index">03</span>
-              <h3>Pitch drafting</h3>
-              <p>Generate a working press draft only after the underlying story clears the readiness gate.</p>
-            </Card>
-            <Card as="article" className="feature-card">
-              <span className="feature-index">04</span>
-              <h3>Next-action recommendations</h3>
-              <p>Turn weaknesses into a practical list of proof, positioning, and timing improvements.</p>
-            </Card>
+              <p>
+                Test the strength, evidence, relevance, and timing of an announcement before
+                outreach begins.
+              </p>
+            </article>
+            <div className="capability-list">
+              <article>
+                <span>01</span>
+                <div>
+                  <h3>Editorial framing guidance</h3>
+                  <p>Identify the strongest frame within the assessment without defaulting to company-centric messaging.</p>
+                </div>
+              </article>
+              <article>
+                <span>02</span>
+                <div>
+                  <h3>Next-action recommendations</h3>
+                  <p>Turn weaknesses into a practical list of proof, positioning, and timing improvements.</p>
+                </div>
+              </article>
+              <article>
+                <span>03</span>
+                <div>
+                  <h3>Gated press-release drafting</h3>
+                  <p>Generate a working press draft only after the underlying story clears the readiness gate.</p>
+                </div>
+              </article>
+            </div>
           </div>
         </PageContainer>
       </section>
 
       <section className="proof-section" aria-labelledby="proof-heading">
-        <PageContainer>
-          <div className="marketing-section-heading">
-            <div>
-              <p className="eyebrow">Early access</p>
-              <h2 id="proof-heading">Proof should be earned, not invented.</h2>
-            </div>
-            <p>
-              Verified founder feedback, customer quotes, and usage milestones will appear here as the
-              early-access programme develops.
-            </p>
+        <PageContainer className="early-access-note">
+          <div>
+            <p className="eyebrow">Early access principle</p>
+            <h2 id="proof-heading">Proof should be earned, not invented.</h2>
           </div>
-
-          <div className="proof-grid">
-            <div>
-              <span>Founder feedback</span>
-              <strong>Reserved for a verified customer quote</strong>
-            </div>
-            <div>
-              <span>Usage signal</span>
-              <strong>Reserved for a measured product milestone</strong>
-            </div>
-            <div>
-              <span>Team outcome</span>
-              <strong>Reserved for a documented PR result</strong>
-            </div>
+          <div className="early-access-copy">
+            <p>
+              PR Copilot will publish founder feedback, customer quotes, and product milestones only
+              when they are verified and permissioned.
+            </p>
+            <span>Until then, the working product is the evidence.</span>
           </div>
         </PageContainer>
       </section>
@@ -677,7 +673,7 @@ useEffect(() => {
         <PageContainer className="comparison-layout">
           <div className="comparison-intro">
             <p className="eyebrow">Purpose-built PR judgment</p>
-            <h2>Why not just use ChatGPT?</h2>
+            <h2>A writing assistant answers the prompt. PR Copilot tests the premise.</h2>
             <p>
               A general-purpose model can help write copy. PR Copilot is designed to decide whether
               the story deserves to be written in the first place.
@@ -686,9 +682,9 @@ useEffect(() => {
 
           <div className="comparison-table" role="table" aria-label="ChatGPT and PR Copilot comparison">
             <div className="comparison-header" role="row">
-              <span role="columnheader">What the workflow needs</span>
-              <span role="columnheader">General-purpose AI</span>
-              <span role="columnheader">PR Copilot</span>
+              <span role="columnheader">Editorial question</span>
+              <span role="columnheader">General assistant</span>
+              <span role="columnheader">PR Copilot desk</span>
             </div>
             <div className="comparison-row" role="row">
               <strong role="cell">A repeatable process</strong>
@@ -710,77 +706,6 @@ useEffect(() => {
               <span role="cell">Requires follow-up prompting</span>
               <span role="cell">Provides journalist reaction and specific next actions</span>
             </div>
-          </div>
-        </PageContainer>
-      </section>
-
-      <section className="pricing-section" id="pricing" aria-labelledby="pricing-heading">
-        <PageContainer>
-          <div className="marketing-section-heading">
-            <div>
-              <p className="eyebrow">Simple plans</p>
-              <h2 id="pricing-heading">Start with one story. Scale to a team workflow.</h2>
-            </div>
-            <p>
-              Indicative pricing for planned subscriptions. Billing is not yet enabled during early access.
-            </p>
-          </div>
-
-          <div className="pricing-grid">
-            <Card as="article" className="pricing-card">
-              <div>
-                <p className="pricing-name">Free</p>
-                <p className="pricing-price">
-                  <strong>£0</strong>
-                  <span>forever</span>
-                </p>
-                <p className="pricing-description">For testing a small number of announcements.</p>
-              </div>
-              <ul className="pricing-features">
-                <li>5 evaluations</li>
-                <li>Basic pitch generation</li>
-              </ul>
-              <a className="button button-secondary" href="#workspace">
-                Start evaluating
-              </a>
-            </Card>
-
-            <Card as="article" className="pricing-card pricing-card-featured">
-              <div className="pricing-card-topline">
-                <p className="pricing-name">Pro</p>
-                <span>Most popular</span>
-              </div>
-              <div>
-                <p className="pricing-price">
-                  <strong>£29</strong>
-                  <span>/ month</span>
-                </p>
-                <p className="pricing-description">For founders and comms leads running regular outreach.</p>
-              </div>
-              <ul className="pricing-features">
-                <li>Unlimited evaluations</li>
-                <li>Advanced recommendations</li>
-                <li>Saved history</li>
-              </ul>
-              <span className="button button-primary pricing-placeholder">Coming soon</span>
-            </Card>
-
-            <Card as="article" className="pricing-card">
-              <div>
-                <p className="pricing-name">Team</p>
-                <p className="pricing-price">
-                  <strong>£79</strong>
-                  <span>/ month</span>
-                </p>
-                <p className="pricing-description">For teams coordinating multiple campaigns.</p>
-              </div>
-              <ul className="pricing-features">
-                <li>Multiple users</li>
-                <li>Shared campaigns</li>
-                <li>Team workspace</li>
-              </ul>
-              <span className="button button-secondary pricing-placeholder">Coming soon</span>
-            </Card>
           </div>
         </PageContainer>
       </section>
@@ -1076,6 +1001,76 @@ useEffect(() => {
           </div>}
         </Card>
       </PageContainer>
+
+      <section className="pricing-section" id="pricing" aria-labelledby="pricing-heading">
+        <PageContainer>
+          <div className="marketing-section-heading">
+            <div>
+              <p className="eyebrow">Planned access</p>
+              <h2 id="pricing-heading">Start with one story. Scale to a team workflow.</h2>
+            </div>
+            <p>
+              Indicative pricing for planned subscriptions. Billing is not yet enabled during early access.
+            </p>
+          </div>
+
+          <div className="pricing-grid">
+            <Card as="article" className="pricing-card">
+              <div>
+                <p className="pricing-name">Free</p>
+                <p className="pricing-price">
+                  <strong>£0</strong>
+                  <span>forever</span>
+                </p>
+                <p className="pricing-description">For testing a small number of announcements.</p>
+              </div>
+              <ul className="pricing-features">
+                <li>5 evaluations</li>
+                <li>Basic pitch generation</li>
+              </ul>
+              <a className="button button-secondary" href="#workspace">
+                Start evaluating
+              </a>
+            </Card>
+
+            <Card as="article" className="pricing-card pricing-card-featured">
+              <div className="pricing-card-topline">
+                <p className="pricing-name">Pro</p>
+              </div>
+              <div>
+                <p className="pricing-price">
+                  <strong>£29</strong>
+                  <span>/ month</span>
+                </p>
+                <p className="pricing-description">For founders and comms leads running regular outreach.</p>
+              </div>
+              <ul className="pricing-features">
+                <li>Unlimited evaluations</li>
+                <li>Advanced recommendations</li>
+                <li>Saved history</li>
+              </ul>
+              <span className="button button-primary pricing-placeholder">Coming soon</span>
+            </Card>
+
+            <Card as="article" className="pricing-card">
+              <div>
+                <p className="pricing-name">Team</p>
+                <p className="pricing-price">
+                  <strong>£79</strong>
+                  <span>/ month</span>
+                </p>
+                <p className="pricing-description">For teams coordinating multiple campaigns.</p>
+              </div>
+              <ul className="pricing-features">
+                <li>Multiple users</li>
+                <li>Shared campaigns</li>
+                <li>Team workspace</li>
+              </ul>
+              <span className="button button-secondary pricing-placeholder">Coming soon</span>
+            </Card>
+          </div>
+        </PageContainer>
+      </section>
 
       <section className="faq-section" id="faq">
         <PageContainer className="faq-layout">
