@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { getDemoAllowance, getDemoVisitorHash } from "../../lib/server/demoUsage";
+import { ADMIN_USAGE_SENTINEL, isAdminUser } from "../../lib/server/admin";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,6 +45,14 @@ export default async function handler(req, res) {
       return res.status(200).json({
         demo: true,
         ...demoAllowance,
+      });
+    }
+
+    if (isAdminUser(verifiedUser)) {
+      return res.status(200).json({
+        generations_used: 0,
+        remaining_generations: ADMIN_USAGE_SENTINEL,
+        generation_limit: ADMIN_USAGE_SENTINEL,
       });
     }
 

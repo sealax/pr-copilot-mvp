@@ -13,6 +13,7 @@ import {
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const ADMIN_USAGE_SENTINEL = -1;
 
 const supabase =
   supabaseUrl && supabaseAnonKey
@@ -263,6 +264,12 @@ useEffect(() => {
   fetchUsage().catch((e) => console.error("Usage fetch failed:", e));
 }, [user, authReady]);
 
+  const isAdminMode = Boolean(
+    user &&
+      (remainingGenerations === ADMIN_USAGE_SENTINEL ||
+        generationLimit === ADMIN_USAGE_SENTINEL)
+  );
+
   const handleEvaluate = async () => {
   if (!authReady) return;
   if (!prompt.trim()) return alert("Add your announcement first");
@@ -359,7 +366,7 @@ useEffect(() => {
     if (!user && !evalData.demoEvaluationToken) {
       return alert("Run a new PR readiness check before generating a demo draft.");
     }
-    if (user && remainingGenerations !== null && remainingGenerations <= 0) {
+    if (user && !isAdminMode && remainingGenerations !== null && remainingGenerations <= 0) {
       return alert(`You’ve used all ${generationLimit} free generations`);
     }
     if (!user && remainingDemoDrafts <= 0) {
@@ -445,7 +452,7 @@ useEffect(() => {
     verdict === "GO" ? "go" : verdict === "CONDITIONAL" ? "conditional" : verdict === "NO-GO" ? "nogo" : "neutral";
   const hasGenerationGate = user ? Boolean(evalData?.id) : Boolean(evalData?.demoEvaluationToken);
   const hasGenerationAllowance = user
-    ? remainingGenerations === null || remainingGenerations > 0
+    ? isAdminMode || remainingGenerations === null || remainingGenerations > 0
     : remainingDemoDrafts > 0;
   const canGenerate = Boolean(
     hasGenerationGate &&
@@ -781,7 +788,9 @@ useEffect(() => {
               </div>
               <span className="subtle-status">
                 {user
-                  ? "Ready to evaluate"
+                  ? isAdminMode
+                    ? "Admin mode — Unlimited testing"
+                    : "Ready to evaluate"
                   : remainingDemoChecks > 0
                   ? `${remainingDemoChecks} demo ${remainingDemoChecks === 1 ? "check" : "checks"} remaining`
                   : "Demo checks complete"}
@@ -923,9 +932,11 @@ useEffect(() => {
               </div>
               <span className="subtle-status">
                 {user
-                  ? remainingGenerations === null
-                    ? "Checking usage"
-                    : `${remainingGenerations} of ${generationLimit} free remaining`
+                  ? isAdminMode
+                    ? "Admin mode — Unlimited testing"
+                    : remainingGenerations === null
+                      ? "Checking usage"
+                      : `${remainingGenerations} of ${generationLimit} free remaining`
                   : `${remainingDemoDrafts} demo ${remainingDemoDrafts === 1 ? "draft" : "drafts"} remaining`}
               </span>
             </div>

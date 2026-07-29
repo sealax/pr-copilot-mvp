@@ -153,7 +153,11 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 DEMO_USAGE_SALT=your_long_random_demo_usage_salt
+ADMIN_EMAILS=csealey1@gmail.com
 ```
+
+`ADMIN_EMAILS` accepts a comma-separated list. Addresses are trimmed and matched
+case-insensitively; signed-in matches receive unlimited testing usage.
 
 Generate the demo salt with a cryptographically secure tool, for example:
 
