@@ -1,3 +1,4 @@
+import { createDemoResult } from "../../lib/server/demoProvenance";
 import OpenAI from "openai";
 
 import { createClient } from "@supabase/supabase-js";
@@ -394,6 +395,7 @@ if (!verifiedUser && demoIpHash) {
 
   return res.status(200).json({
     ...evaluationResponse,
+    demoResult: createDemoResult(cleanAnnouncement.value, { market: ctx.market, partners: ctx.partners, funding: ctx.funding }, evaluationResponse),
     demoEvaluationToken: createDemoEvaluationToken(
       demoIpHash,
       cleanAnnouncement.value,

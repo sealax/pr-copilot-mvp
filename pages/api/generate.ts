@@ -1,3 +1,4 @@
+import { createDraftReceipt, verifyDemoResult } from "../../lib/server/demoProvenance";
 import OpenAI from 'openai';
 
 import { createClient } from '@supabase/supabase-js';
@@ -90,7 +91,7 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { prompt, evaluation_id, demoEvaluationToken } = req.body;
+    const { prompt, evaluation_id, demoEvaluationToken, evaluationReceipt } = req.body ?? {};
     const verifiedUser = await getOptionalVerifiedUser(req);
     const adminUser = isAdminUser(verifiedUser);
 
@@ -106,6 +107,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: cleanPrompt.error });
     }
 
+    let canonicalPrompt = cleanPrompt.value;
     const demoIpHash = verifiedUser ? null : getDemoVisitorHash(req);
     const rateLimitError = adminUser
       ? null
@@ -128,7 +130,14 @@ export default async function handler(req, res) {
         });
       }
 
-      if (demoEvaluation.verdict === "NO-GO") {
+      const anonymousResult = verifyDemoResult(evaluationReceipt);
+      if (!anonymousResult || anonymousResult.announcement !== cleanPrompt.value ||
+          anonymousResult.evaluation.verdict !== demoEvaluation.verdict) {
+        return res.status(403).json({ error: "Run a new readiness check before generating a demo draft" });
+      }
+      canonicalPrompt = anonymousResult.announcement;
+
+      if (!["GO", "CONDITIONAL"].includes(demoEvaluation.verdict)) {
         return res.status(403).json({
           error: "Generation is blocked for NO-GO evaluations",
         });
@@ -185,7 +194,7 @@ export default async function handler(req, res) {
 
       const { data: evaluation, error: evaluationError } = await supabase
         .from("evaluations")
-        .select("id, verdict, user_id")
+        .select("id, verdict, user_id, announcement, source, demo_import_id, evaluation_json")
         .eq("id", evaluationId)
         .eq("user_id", verifiedUser.id)
         .single();
@@ -196,7 +205,20 @@ export default async function handler(req, res) {
 
       evaluationVerdict = evaluation.verdict;
 
-      if (evaluationVerdict === "NO-GO") {
+      if (evaluation.source === "anonymous_demo" || evaluation.demo_import_id) {
+        const original = verifyDemoResult(evaluation.evaluation_json?.evaluationReceipt, false);
+        if (!original || original.importId !== evaluation.demo_import_id ||
+            original.announcement !== evaluation.announcement || original.evaluation.verdict !== evaluationVerdict) {
+          return res.status(403).json({ error: "This imported evaluation needs reassessment before drafting" });
+        }
+      }
+
+      if (typeof evaluation.announcement !== "string" || evaluation.announcement.trim() !== cleanPrompt.value) {
+        return res.status(409).json({ error: "Announcement changed. Run a new readiness check before drafting" });
+      }
+      canonicalPrompt = evaluation.announcement;
+
+      if (!["GO", "CONDITIONAL"].includes(evaluationVerdict)) {
         return res.status(403).json({ error: "Generation is blocked for NO-GO evaluations" });
       }
     }
@@ -216,7 +238,7 @@ Output format:
 6) MEDIA CONTACT (Name, email, phone as [TBD] if unknown)
 
 Brief:
-${cleanPrompt.value}`;
+${canonicalPrompt}`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -242,6 +264,7 @@ ${cleanPrompt.value}`;
 
       return res.status(200).json({
         response: text,
+        draftReceipt: createDraftReceipt(evaluationReceipt, text),
         ...demoAllowance,
       });
     }
@@ -251,7 +274,7 @@ ${cleanPrompt.value}`;
       .insert({
         evaluation_id: evaluationId,
         user_id: verifiedUser!.id,
-        prompt: cleanPrompt.value,
+        prompt: canonicalPrompt,
         output: text,
         model: "gpt-4o-mini",
       })

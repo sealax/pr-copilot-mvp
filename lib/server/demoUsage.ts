@@ -16,7 +16,7 @@ type DemoEvaluationToken = {
   expiresAt: number;
 };
 
-function getDemoSalt() {
+export function getDemoSalt() {
   const salt = process.env.DEMO_USAGE_SALT;
 
   if (!salt || salt.length < 32) {

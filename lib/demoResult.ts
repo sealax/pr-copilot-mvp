@@ -28,6 +28,8 @@ export type PendingDemoResult = {
       next_actions: string[];
     };
   };
+  evaluationReceipt?: string;
+  draftReceipt?: string;
   draft?: string;
 };
 
