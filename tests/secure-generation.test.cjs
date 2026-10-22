@@ -10,7 +10,60 @@ function harness({ effectsEnabled = false, storageValues = new Map() } = {}) {
   const state = { evaluations: [], generations: [], calls: [], user: { id: 'user-a', email: 'user@example.test' } };
   const db = {
     auth: { getSession: async () => ({ data: { session: state.user ? { access_token: 'valid' } : null } }), getUser: async token => token === 'invalid' ? { error: true } : { data: { user: state.user } } },
-    rpc: async () => ({ data: [{ readiness_checks_used: 1, drafts_used: 1 }] }),
+    rpc(name, args) {
+      return { abortSignal: async () => {
+        state.rpcCalls ??= []; state.rpcCalls.push({ name, args });
+        if (state.rpcError === name) return { data: null, error: { message: 'Mock database failure' } };
+        state.accounts ??= new Map(); state.reservations ??= new Map();
+        const accountFor = (params) => {
+          const key = params.p_user_id || params.p_demo_hash;
+          if (!state.accounts.has(key)) state.accounts.set(key, { key, userId: params.p_user_id, evals: 0, drafts: state.generations.filter(row => row.user_id === params.p_user_id).length });
+          return state.accounts.get(key);
+        };
+        const snapshot = (a, admin = false) => {
+          const active = [...state.reservations.values()].filter(r => r.account === a && ['reserved','dispatched'].includes(r.state));
+          return { evaluations_used: a.evals, generations_used: a.drafts, evaluation_limit: admin ? -1 : a.userId ? 5 : 2, generation_limit: admin ? -1 : a.userId ? 5 : 1,
+            remaining_evaluations: admin ? -1 : Math.max(0, (a.userId ? 5 : 2) - a.evals - active.filter(r => r.operation === 'evaluate').length),
+            remaining_generations: admin ? -1 : Math.max(0, (a.userId ? 5 : 1) - a.drafts - active.filter(r => r.operation === 'generate').length) };
+        };
+        if (name === 'get_api_usage') return { data: snapshot(accountFor(args), args.p_admin) };
+        if (name === 'reserve_api_usage') {
+          const a = accountFor(args); const usage = snapshot(a, args.p_admin);
+          const busy = [...state.reservations.values()].some(r => r.account === a && ['reserved','dispatched'].includes(r.state));
+          const exhausted = (args.p_operation === 'evaluate' ? usage.remaining_evaluations : usage.remaining_generations) === 0;
+          if (busy || exhausted) return { data: { ...usage, allowed: false, status: busy ? 429 : 403, error: 'Usage blocked' } };
+          state.reservations.set(args.p_request_id, { account: a, operation: args.p_operation, state: 'reserved', admin: args.p_admin });
+          return { data: { ...snapshot(a, args.p_admin), allowed: true, reservation_id: args.p_request_id } };
+        }
+        if (name === 'import_demo_draft') {
+          const a = accountFor(args);
+          if (!state.generations.some(row => row.evaluation_id === args.p_evaluation_id && row.user_id === args.p_user_id)) {
+            const e = state.evaluations.find(row => row.id === args.p_evaluation_id);
+            state.generations.push({ id: `saved-${state.generations.length}`, evaluation_id: e.id, user_id: args.p_user_id, prompt: e.announcement, output: args.p_draft, model: 'anonymous_demo_import' }); a.drafts++;
+          }
+          return { data: null };
+        }
+        const r = state.reservations.get(args.p_request_id);
+        if (name === 'release_api_usage') { if (r && ['reserved','dispatched'].includes(r.state)) r.state = 'released'; return { data: null }; }
+        if (name === 'dispatch_api_usage') {
+          if (!r || r.state !== 'reserved') return { data: { allowed: false, status: 409, error: 'Already dispatched' } };
+          if ((state.globalAttempts || 0) >= (state.dailyLimit ?? 200)) return { data: { allowed: false, status: 503, error: 'Daily AI safety limit reached' } };
+          state.globalAttempts = (state.globalAttempts || 0) + 1; r.state = 'dispatched'; return { data: { allowed: true } };
+        }
+        if (name === 'complete_api_usage') {
+          if (r.state === 'succeeded') return { data: { ...snapshot(r.account, args.p_admin), result_id: r.resultId } };
+          if (r.state !== 'dispatched') return { data: null, error: true };
+          if (r.account.userId) {
+            const rows = r.operation === 'evaluate' ? state.evaluations : state.generations;
+            r.resultId = `saved-${rows.length}`;
+            rows.push({ id: r.resultId, user_id: r.account.userId, ...args.p_result });
+          }
+          r.state = 'succeeded'; if (r.operation === 'evaluate') r.account.evals++; else r.account.drafts++;
+          return { data: { ...snapshot(r.account, args.p_admin), result_id: r.resultId || null } };
+        }
+        throw new Error('Unexpected usage RPC: ' + name);
+      } };
+    },
     from(table) {
       let inserted; const filters = []; let count = false;
       const result = () => {
@@ -63,18 +116,20 @@ function harness({ effectsEnabled = false, storageValues = new Map() } = {}) {
       if (name === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'fragment' };
       if (name === 'next/head') return () => null;
       if (name === '@supabase/supabase-js') return { createClient: () => db };
-      if (name === 'openai') return class { chat = { completions: { create: async request => {
+      if (name === 'openai') return class { constructor(options) { state.openaiOptions = options; } chat = { completions: { create: async request => {
         state.calls.push(request);
-        return { choices: [{ message: { content: request.messages[0].content.includes('primary responsibility') ? JSON.stringify(state.modelEvaluation ?? evaluation) : 'A legitimate draft.' } }] };
+        if (state.modelGate) await state.modelGate;
+        if (state.modelError) throw state.modelError;
+        return { choices: [{ finish_reason: state.finishReason ?? 'stop', message: { content: state.modelContent ?? (request.messages[0].content.includes('primary responsibility') ? JSON.stringify(state.modelEvaluation ?? evaluation) : 'A legitimate draft.') } }] };
       } } }; };
       if (name.startsWith('.')) { const target = path.resolve(path.dirname(filename), name); return load(target + (fs.existsSync(target + '.ts') ? '.ts' : '.tsx')); }
       return require(name);
     };
-    vm.runInNewContext('(function(require,module,exports,process,Buffer,console){' + code + '\n})', { window: storageWindow, fetch: (...args) => state.fetch(...args), alert: message => { state.alert = message; } })(localRequire, module, module.exports, { env: environment }, Buffer, { info() {}, error() {} });
+    vm.runInNewContext('(function(require,module,exports,process,Buffer,console){' + code + '\n})', { AbortController, setTimeout, clearTimeout, window: storageWindow, fetch: (...args) => state.fetch(...args), alert: message => { state.alert = message; } })(localRequire, module, module.exports, { env: environment }, Buffer, { info() {}, error() {} });
     return module.exports;
   }
   async function request(route, body, authenticated = true, ip = '192.0.2.1') {
-    const req = { method: 'POST', body, headers: { ...(authenticated ? { authorization: 'Bearer valid' } : {}), 'x-forwarded-for': ip }, socket: {} };
+    const req = { method: route === 'usage' ? 'GET' : 'POST', body, headers: { ...(authenticated ? { authorization: 'Bearer valid' } : {}), 'x-forwarded-for': ip }, socket: {} };
     const res = { status(code) { this.code = code; return this; }, json(data) { this.data = data; return this; } };
     await load(`pages/api/${route}.ts`).default(req, res); return res;
   }
@@ -95,6 +150,7 @@ const context = { market: 'Technology', partners: 'Named customer', funding: 'Bo
 function saved(verdict = 'GO', user = 'user-a') { return { id: 'evaluation-a', user_id: user, announcement: 'Evaluated announcement', verdict, source: 'authenticated' }; }
 function receipt(h, verdict = 'GO') { return h.load('lib/server/demoProvenance.ts').createDemoResult('Evaluated announcement', context, { ...evaluation, verdict }); }
 
+if (require.main === module) {
 test('owned GO and CONDITIONAL use saved announcement; trim remains compatible', async () => {
   for (const verdict of ['GO', 'CONDITIONAL']) {
     const h = harness(); h.state.evaluations.push(saved(verdict));
@@ -286,7 +342,7 @@ for (const admin of [false, true]) {
     h.state.user = { id: 'user-a', email: 'user@example.test' }; h.state.admin = admin;
     h.renderHome(); await h.flushEffects();
     let tree = h.renderHome();
-    if (admin) assert.ok(findNode(tree, node => node.props?.children === 'Admin mode — Unlimited testing'));
+    if (admin) assert.ok(findNode(tree, node => node.props?.children === 'Admin testing — safety limits apply'));
     assert.ok(h.storageValues.has(pendingKey));
     releaseImport(); await settle(); tree = h.renderHome();
     assert.equal(h.state.evaluations.length, 1);
@@ -380,3 +436,6 @@ test('older history response cannot overwrite post-import archive', async () => 
   finishOldHistory(jsonResponse({ history: [] })); await settle();
   assert.ok(findNode(h.renderHome(), node => node.props?.className === 'history-item'));
 });
+
+}
+module.exports = { harness, evaluation, context, saved, receipt };

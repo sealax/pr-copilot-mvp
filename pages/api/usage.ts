@@ -1,7 +1,7 @@
+import { readUsage, UsageError } from "../../lib/server/apiUsage";
 import { createClient } from '@supabase/supabase-js';
-import { getDemoAllowance, getDemoVisitorHash } from "../../lib/server/demoUsage";
+import { getDemoVisitorHash } from "../../lib/server/demoUsage";
 import {
-  ADMIN_USAGE_SENTINEL,
   isAdminConfigPresent,
   isAdminUser,
   normalizeAdminEmail,
@@ -12,7 +12,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-const FREE_GENERATION_LIMIT = 5;
 
 async function getOptionalVerifiedUser(req) {
   const authHeader = Array.isArray(req.headers.authorization)
@@ -42,10 +41,7 @@ export default async function handler(req, res) {
     const verifiedUser = await getOptionalVerifiedUser(req);
 
     if (!verifiedUser) {
-      const demoAllowance = await getDemoAllowance(
-        supabase,
-        getDemoVisitorHash(req)
-      );
+      const demoAllowance = await readUsage(supabase, null, getDemoVisitorHash(req), false);
 
       return res.status(200).json({
         demo: true,
@@ -68,32 +64,10 @@ export default async function handler(req, res) {
       isAdmin,
     });
 
-    if (isAdmin) {
-      return res.status(200).json({
-        generations_used: 0,
-        remaining_generations: ADMIN_USAGE_SENTINEL,
-        generation_limit: ADMIN_USAGE_SENTINEL,
-        ...adminDiagnostics,
-      });
-    }
-
-    const { count: generationsUsed, error } = await supabase
-      .from("generations")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", verifiedUser.id);
-
-    if (error || typeof generationsUsed !== "number") {
-      console.error("Supabase usage count error:", error);
-      return res.status(500).json({ error: "Could not check generation usage" });
-    }
-
-    return res.status(200).json({
-      generations_used: generationsUsed,
-      remaining_generations: Math.max(0, FREE_GENERATION_LIMIT - generationsUsed),
-      generation_limit: FREE_GENERATION_LIMIT,
-      ...adminDiagnostics,
-    });
+    const allowance = await readUsage(supabase, verifiedUser.id, null, isAdmin);
+    return res.status(200).json({ ...allowance, ...adminDiagnostics });
   } catch (err) {
+    if (err instanceof UsageError) return res.status(err.status).json({ error: err.message });
     if (err instanceof Error && err.message === "Invalid Supabase access token") {
       return res.status(401).json({ error: "Invalid Supabase access token" });
     }

@@ -1,3 +1,4 @@
+import { usageRpc, usageScope } from "../../lib/server/apiUsage";
 import { verifyDemoResult, verifyDraftReceipt } from "../../lib/server/demoProvenance";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
@@ -256,34 +257,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (payload.draft) {
-      const { count, error: countError } = await supabase
-        .from("generations")
-        .select("id", { count: "exact", head: true })
-        .eq("evaluation_id", evaluation.id)
-        .eq("user_id", verifiedUser.id);
-
-      if (countError || typeof count !== "number") {
-        console.error("Demo draft import lookup error:", countError);
-        return res.status(500).json({ error: "Could not check imported demo draft" });
-      }
-
-      if (count === 0) {
-        const { error: generationError } = await supabase
-          .from("generations")
-          .insert({
-            evaluation_id: evaluation.id,
-            user_id: verifiedUser.id,
-            prompt: payload.announcement,
-            output: payload.draft,
-            model: "anonymous_demo_import",
-            created_at: payload.timestamp,
-          });
-
-        if (generationError) {
-          console.error("Demo draft import error:", generationError);
-          return res.status(500).json({ error: "Could not save demo draft" });
-        }
-      }
+      await usageRpc(supabase, "import_demo_draft", {
+        p_scope: usageScope(), p_user_id: verifiedUser.id, p_evaluation_id: evaluation.id,
+        p_draft: payload.draft, p_created_at: payload.timestamp,
+      });
     }
 
     return res.status(200).json({
