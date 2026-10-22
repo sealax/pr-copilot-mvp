@@ -46,6 +46,7 @@ export default function Home() {
 
   const [evalData, setEvalData] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
+  const historyRequestId = useRef(0);
 
 useEffect(() => {
   if (!supabase) {
@@ -62,13 +63,14 @@ useEffect(() => {
 const fetchHistory = async () => {
   if (!supabase || !user) return;
 
+    const requestId = ++historyRequestId.current;
     const headers = await getApiHeaders(true);
     const res = await fetch("/api/history", { headers });
     const data = await res.json();
+    if (requestId !== historyRequestId.current) return;
 
     if (!res.ok) {
-      console.error("History API error:", data);
-      return;
+      throw new Error("Could not refresh evaluation history");
     }
 
     setHistory(Array.isArray(data.history) ? data.history : []);
@@ -87,7 +89,13 @@ const persistDemoResult = (
   draft?: string,
   draftReceipt?: string
 ) => {
-  if (!evaluation.demoResult?.evaluationReceipt) return null;
+  if (!evaluation.demoResult?.evaluationReceipt) {
+    setDemoSaveNotice({
+      type: "warning",
+      message: "This evaluation cannot be transferred to an account because its verification receipt is missing. Run a new readiness check after signing in.",
+    });
+    return null;
+  }
   const result: PendingDemoResult = {
     ...evaluation.demoResult,
     ...(draft ? { draft, draftReceipt } : {}),
@@ -100,7 +108,7 @@ const persistDemoResult = (
     console.error("Could not preserve demo result:", error);
     setDemoSaveNotice({
       type: "warning",
-      message: "Your demo result could not be prepared for account saving in this browser.",
+      message: "This browser could not save your evaluation for transfer to an account. Allow site storage, or sign in and run a new readiness check.",
     });
     return null;
   }
@@ -109,13 +117,24 @@ const persistDemoResult = (
 useEffect(() => {
   if (!user) return;
 
-  fetchHistory();
+  fetchHistory().catch((error) => console.error("History refresh failed:", error));
+  return () => { historyRequestId.current += 1; };
 }, [user]);
 
 useEffect(() => {
   if (!user || demoImportInFlight.current) return;
 
-  const pendingResult = readPendingDemoResult();
+  let pendingResult: PendingDemoResult | null;
+  try {
+    pendingResult = readPendingDemoResult();
+  } catch (error) {
+    console.error("Could not recover demo result:", error);
+    setDemoSaveNotice({
+      type: "warning",
+      message: "We could not read your saved demo result in this browser. Check site storage permissions and refresh to retry. If it remains unreadable, run a new readiness check.",
+    });
+    return;
+  }
 
   if (!pendingResult) return;
 
@@ -135,12 +154,28 @@ useEffect(() => {
         throw new Error(data?.error ?? "Could not save demo result");
       }
 
-      clearPendingDemoResult(pendingResult.importId);
+      let storageCleared = true;
+      try {
+        clearPendingDemoResult(pendingResult.importId);
+      } catch (error) {
+        storageCleared = false;
+        console.error("Could not clear imported demo result:", error);
+      }
       setDemoSaveNotice({
-        type: "success",
-        message: "Your demo result has been saved to your account.",
+        type: storageCleared ? "success" : "warning",
+        message: storageCleared
+          ? "Your demo result has been saved to your account."
+          : "Your demo result was saved to your account, but this browser could not clear its pending copy. Check site storage permissions; retrying the import is safe.",
       });
-      await fetchHistory();
+      try {
+        await fetchHistory();
+      } catch (error) {
+        console.error("Imported result history refresh failed:", error);
+        setDemoSaveNotice({
+          type: "warning",
+          message: "Your demo result was saved to your account, but the archive could not refresh. Refresh the page to load your saved evaluation.",
+        });
+      }
     } catch (error) {
       console.error("Demo result import failed:", error);
       setDemoSaveNotice({
@@ -187,6 +222,7 @@ const logout = async () => {
   }
 
   invalidateAssessment();
+  historyRequestId.current += 1;
   setUser(null);
   setHistory([]);
   setEvalData(null);

@@ -6,10 +6,10 @@ const vm = require('node:vm');
 const ts = require('typescript');
 
 // Compile existing TypeScript in memory; SDKs are replaced before loading routes.
-function harness() {
+function harness({ effectsEnabled = false, storageValues = new Map() } = {}) {
   const state = { evaluations: [], generations: [], calls: [], user: { id: 'user-a', email: 'user@example.test' } };
   const db = {
-    auth: { getSession: async () => ({ data: { session: { access_token: 'valid' } } }), getUser: async token => token === 'invalid' ? { error: true } : { data: { user: state.user } } },
+    auth: { getSession: async () => ({ data: { session: state.user ? { access_token: 'valid' } : null } }), getUser: async token => token === 'invalid' ? { error: true } : { data: { user: state.user } } },
     rpc: async () => ({ data: [{ readiness_checks_used: 1, drafts_used: 1 }] }),
     from(table) {
       let inserted; const filters = []; let count = false;
@@ -33,11 +33,24 @@ function harness() {
     },
   };
   const environment = { NEXT_PUBLIC_SUPABASE_URL: 'https://example.invalid', NEXT_PUBLIC_SUPABASE_ANON_KEY: 'test-only', DEMO_USAGE_SALT: 'test-only-signing-secret-at-least-32-characters', ADMIN_EMAILS: '', OPENAI_API_KEY: 'test-only' };
+  const storageWindow = { localStorage: {
+    getItem(key) { if (state.storageFailure === 'read') throw new Error('Storage read blocked'); return storageValues.get(key) ?? null; },
+    setItem(key, value) { if (state.storageFailure === 'write') throw new Error('Storage write blocked'); storageValues.set(key, value); },
+    removeItem(key) { if (state.storageFailure === 'remove') throw new Error('Storage removal blocked'); storageValues.delete(key); },
+  } };
+  const effects = []; const effectDeps = []; const effectCleanups = []; let effectIndex = 0;
   const hooks = []; let hookIndex = 0;
   const react = {
     useState(initial) { const index = hookIndex++; if (!(index in hooks)) hooks[index] = initial; return [hooks[index], value => { hooks[index] = typeof value === 'function' ? value(hooks[index]) : value; }]; },
     useRef(initial) { const index = hookIndex++; return hooks[index] ?? (hooks[index] = { current: initial }); },
-    useEffect() {},
+    useEffect(callback, deps) {
+      if (!effectsEnabled) return;
+      const index = effectIndex++;
+      if (!effectDeps[index] || deps.some((value, i) => !Object.is(value, effectDeps[index][i]))) {
+        effectDeps[index] = deps;
+        effects.push(() => { effectCleanups[index]?.(); effectCleanups[index] = callback(); });
+      }
+    },
   };
   const cache = new Map();
   function load(filename) {
@@ -52,12 +65,12 @@ function harness() {
       if (name === '@supabase/supabase-js') return { createClient: () => db };
       if (name === 'openai') return class { chat = { completions: { create: async request => {
         state.calls.push(request);
-        return { choices: [{ message: { content: request.messages[0].content.includes('primary responsibility') ? JSON.stringify(evaluation) : 'A legitimate draft.' } }] };
+        return { choices: [{ message: { content: request.messages[0].content.includes('primary responsibility') ? JSON.stringify(state.modelEvaluation ?? evaluation) : 'A legitimate draft.' } }] };
       } } }; };
       if (name.startsWith('.')) { const target = path.resolve(path.dirname(filename), name); return load(target + (fs.existsSync(target + '.ts') ? '.ts' : '.tsx')); }
       return require(name);
     };
-    vm.runInNewContext('(function(require,module,exports,process,Buffer,console){' + code + '\n})', { fetch: (...args) => state.fetch(...args), alert: message => { state.alert = message; } })(localRequire, module, module.exports, { env: environment }, Buffer, { info() {}, error() {} });
+    vm.runInNewContext('(function(require,module,exports,process,Buffer,console){' + code + '\n})', { window: storageWindow, fetch: (...args) => state.fetch(...args), alert: message => { state.alert = message; } })(localRequire, module, module.exports, { env: environment }, Buffer, { info() {}, error() {} });
     return module.exports;
   }
   async function request(route, body, authenticated = true, ip = '192.0.2.1') {
@@ -67,10 +80,14 @@ function harness() {
   }
   function renderHome() {
     const Home = load('pages/index.tsx').default;
-    hooks[2] = state.user; hooks[3] = true; hookIndex = 0;
+    hooks[2] = state.user; hooks[3] = true; hookIndex = 0; effectIndex = 0;
     return Home();
   }
-  return { state, request, load, environment, renderHome };
+  async function flushEffects() {
+    for (const effect of effects.splice(0)) effect();
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  return { state, request, load, environment, renderHome, flushEffects, storageValues };
 
 }
 const evaluation = { verdict: 'GO', risk_score: 15, risk_breakdown: { external_validation: 3, beneficiary_clarity: 3, explainability: 3, third_party_support: 3, impact_vs_activity: 3 }, primary_failure_modes: [], journalist_reaction: 'A concrete story.', recommendation: { summary: 'Proceed with PR.', next_actions: [] } };
@@ -218,4 +235,148 @@ test('saved history restores its own brief, verdict and draft', async () => {
   assert.equal(findNode(tree, node => node.type === 'textarea').props.value, 'Evaluated announcement');
   assert.equal(findNode(tree, node => node.type === 'pre').props.children, 'Saved draft');
   assert.equal(button(tree, 'Generate Press Release').props.disabled, false);
+});
+
+const pendingKey = 'pr_copilot_pending_demo_result';
+const jsonResponse = (data, ok = true) => ({ ok, json: async () => data });
+const settle = () => new Promise(resolve => setImmediate(resolve));
+function connectFrontend(h) {
+  h.state.requests = [];
+  h.state.fetch = async (url, options) => {
+    h.state.requests.push(url);
+    if (url === '/api/usage') return jsonResponse(h.state.user ? { isAdmin: !!h.state.admin, remaining_generations: 5, generation_limit: 5 } : { demo: true, remainingChecks: 2, remainingDrafts: 1 });
+    if (url === '/api/history') return jsonResponse({ history: h.state.evaluations.slice() });
+    const route = url === '/api/evaluate' ? 'evaluate' : 'import-demo';
+    const response = await h.request(route, JSON.parse(options.body), !!h.state.user);
+    return jsonResponse(response.data, response.code === 200);
+  };
+}
+async function anonymousNoGo(h, text = 'Evaluated announcement') {
+  h.state.user = null;
+  h.state.modelEvaluation = { ...evaluation, verdict: 'NO-GO' };
+  let tree = h.renderHome(); await h.flushEffects(); tree = h.renderHome();
+  findNode(tree, node => node.type === 'textarea').props.onChange({ target: { value: text } });
+  tree = h.renderHome(); await button(tree, 'Run PR Readiness Check').props.onClick();
+  return h.renderHome();
+}
+function notice(tree) {
+  return findNode(tree, node => node.props?.role === 'status' && node.props?.className?.includes('demo-save-notice'))?.props.children[0].props.children;
+}
+
+test('anonymous NO-GO assessments preserve signed provenance and only the latest result', async () => {
+  const h = harness({ effectsEnabled: true }); connectFrontend(h);
+  await anonymousNoGo(h, 'First NO-GO announcement');
+  const first = JSON.parse(h.storageValues.get(pendingKey));
+  assert.equal(first.evaluation.verdict, 'NO-GO'); assert.ok(first.evaluationReceipt);
+  const tree = await anonymousNoGo(h, 'Second NO-GO announcement');
+  const second = JSON.parse(h.storageValues.get(pendingKey));
+  assert.equal(second.announcement, 'Second NO-GO announcement');
+  assert.notEqual(second.importId, first.importId);
+  assert.equal(h.storageValues.size, 1);
+  assert.equal(button(tree, 'Generate Press Release').props.disabled, true);
+});
+for (const admin of [false, true]) {
+  test(`post-authentication effect imports NO-GO, clears storage and refreshes archive${admin ? ' while Admin Mode is active' : ''}`, async () => {
+    const h = harness({ effectsEnabled: true }); connectFrontend(h);
+    await anonymousNoGo(h);
+    const pending = JSON.parse(h.storageValues.get(pendingKey));
+    const fetch = h.state.fetch; let releaseImport;
+    const gate = new Promise(resolve => { releaseImport = resolve; });
+    h.state.fetch = async (url, options) => { if (url === '/api/import-demo') await gate; return fetch(url, options); };
+    h.state.user = { id: 'user-a', email: 'user@example.test' }; h.state.admin = admin;
+    h.renderHome(); await h.flushEffects();
+    let tree = h.renderHome();
+    if (admin) assert.ok(findNode(tree, node => node.props?.children === 'Admin mode — Unlimited testing'));
+    assert.ok(h.storageValues.has(pendingKey));
+    releaseImport(); await settle(); tree = h.renderHome();
+    assert.equal(h.state.evaluations.length, 1);
+    assert.equal(h.state.evaluations[0].demo_import_id, pending.importId);
+    assert.equal(h.state.evaluations[0].verdict, 'NO-GO');
+    assert.equal(h.storageValues.has(pendingKey), false);
+    assert.match(notice(tree), /saved to your account/);
+    assert.ok(findNode(tree, node => node.props?.className === 'history-item'));
+    assert.equal(h.state.requests.filter(url => url === '/api/history').length, 2);
+    await h.flushEffects(); assert.equal(h.state.requests.filter(url => url === '/api/import-demo').length, 1);
+  });
+}
+test('missing provenance warns instead of silently skipping anonymous preservation', async () => {
+  const h = harness(); h.state.user = null;
+  h.state.fetch = async () => jsonResponse({ ...evaluation, verdict: 'NO-GO' });
+  const tree = await anonymousNoGo(h);
+  assert.match(notice(tree), /cannot be transferred.*receipt is missing/);
+  assert.equal(h.storageValues.has(pendingKey), false);
+});
+test('storage write failure warns and does not hide the anonymous verdict', async () => {
+  const h = harness(); connectFrontend(h); h.state.storageFailure = 'write';
+  const tree = await anonymousNoGo(h);
+  assert.match(notice(tree), /could not save your evaluation/);
+  assert.ok(findNode(tree, node => node.props?.children === 'NO-GO'));
+  assert.equal(h.storageValues.has(pendingKey), false);
+});
+test('storage read failure on authentication displays recovery warning and skips import', async () => {
+  const h = harness({ effectsEnabled: true }); connectFrontend(h);
+  const original = receipt(h, 'NO-GO'); h.storageValues.set(pendingKey, JSON.stringify(original));
+  h.state.storageFailure = 'read'; h.renderHome(); await h.flushEffects();
+  assert.match(notice(h.renderHome()), /could not read your saved demo result/);
+  assert.equal(h.state.requests.includes('/api/import-demo'), false);
+  assert.equal(h.storageValues.has(pendingKey), true);
+});
+test('malformed or unsupported pending storage warns without deleting it', async () => {
+  for (const value of ['{bad-json', JSON.stringify({ version: 99 })]) {
+    const h = harness({ effectsEnabled: true }); connectFrontend(h); h.storageValues.set(pendingKey, value);
+    h.renderHome(); await h.flushEffects();
+    assert.match(notice(h.renderHome()), /could not read your saved demo result/);
+    assert.equal(h.storageValues.get(pendingKey), value);
+    assert.equal(h.state.requests.includes('/api/import-demo'), false);
+  }
+});
+test('failed imports retain pending storage and show retry warning', async () => {
+  for (const failure of ['rejected', 'network']) {
+    const h = harness({ effectsEnabled: true }); connectFrontend(h);
+    const original = receipt(h, 'NO-GO'); const raw = JSON.stringify(original); h.storageValues.set(pendingKey, raw);
+    const fetch = h.state.fetch;
+    h.state.fetch = async (url, options) => {
+      if (url === '/api/import-demo') {
+        if (failure === 'network') throw new Error('Network unavailable');
+        return jsonResponse({ error: 'Import rejected' }, false);
+      }
+      return fetch(url, options);
+    };
+    h.renderHome(); await h.flushEffects();
+    assert.equal(h.storageValues.get(pendingKey), raw);
+    assert.match(notice(h.renderHome()), /could not save your demo result yet/);
+    assert.equal(h.state.evaluations.length, 0);
+  }
+});
+test('successful import refreshes history even if removing pending storage fails', async () => {
+  const h = harness({ effectsEnabled: true }); connectFrontend(h);
+  h.storageValues.set(pendingKey, JSON.stringify(receipt(h, 'NO-GO'))); h.state.storageFailure = 'remove';
+  h.renderHome(); await h.flushEffects();
+  const tree = h.renderHome();
+  assert.equal(h.state.evaluations.length, 1); assert.ok(h.storageValues.has(pendingKey));
+  assert.match(notice(tree), /saved to your account.*could not clear/);
+  assert.ok(findNode(tree, node => node.props?.className === 'history-item'));
+});
+test('history failure after successful import reports saved state, not import failure', async () => {
+  const h = harness({ effectsEnabled: true }); connectFrontend(h);
+  h.storageValues.set(pendingKey, JSON.stringify(receipt(h, 'NO-GO')));
+  const fetch = h.state.fetch;
+  h.state.fetch = async (url, options) => url === '/api/history' ? jsonResponse({ error: 'Unavailable' }, false) : fetch(url, options);
+  h.renderHome(); await h.flushEffects();
+  assert.equal(h.storageValues.has(pendingKey), false);
+  assert.equal(h.state.evaluations.length, 1);
+  assert.match(notice(h.renderHome()), /was saved.*archive could not refresh/);
+});
+test('older history response cannot overwrite post-import archive', async () => {
+  const h = harness({ effectsEnabled: true }); connectFrontend(h);
+  h.storageValues.set(pendingKey, JSON.stringify(receipt(h, 'NO-GO')));
+  const fetch = h.state.fetch; let finishOldHistory; let historyCount = 0;
+  h.state.fetch = async (url, options) => {
+    if (url === '/api/history' && ++historyCount === 1) return new Promise(resolve => { finishOldHistory = resolve; });
+    return fetch(url, options);
+  };
+  h.renderHome(); await h.flushEffects();
+  assert.ok(findNode(h.renderHome(), node => node.props?.className === 'history-item'));
+  finishOldHistory(jsonResponse({ history: [] })); await settle();
+  assert.ok(findNode(h.renderHome(), node => node.props?.className === 'history-item'));
 });
