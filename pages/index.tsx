@@ -46,6 +46,7 @@ export default function Home() {
 
   const [evalData, setEvalData] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
+  const historyRequestId = useRef(0);
 
 useEffect(() => {
   if (!supabase) {
@@ -62,51 +63,42 @@ useEffect(() => {
 const fetchHistory = async () => {
   if (!supabase || !user) return;
 
+    const requestId = ++historyRequestId.current;
     const headers = await getApiHeaders(true);
     const res = await fetch("/api/history", { headers });
     const data = await res.json();
+    if (requestId !== historyRequestId.current) return;
 
     if (!res.ok) {
-      console.error("History API error:", data);
-      return;
+      throw new Error("Could not refresh evaluation history");
     }
 
     setHistory(Array.isArray(data.history) ? data.history : []);
   };
 
-const createImportId = () => {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random()
-    .toString(36)
-    .slice(2)}`;
+const briefingRevision = useRef(0);
+const invalidateAssessment = () => {
+  briefingRevision.current += 1;
+  setEvalData(null);
+  setVerdict("");
+  setOutput("");
 };
 
 const persistDemoResult = (
   evaluation: any,
   draft?: string,
-  existingImportId?: string
+  draftReceipt?: string
 ) => {
+  if (!evaluation.demoResult?.evaluationReceipt) {
+    setDemoSaveNotice({
+      type: "warning",
+      message: "This evaluation cannot be transferred to an account because its verification receipt is missing. Run a new readiness check after signing in.",
+    });
+    return null;
+  }
   const result: PendingDemoResult = {
-    version: 1,
-    importId: existingImportId || createImportId(),
-    source: "anonymous_demo",
-    timestamp: new Date().toISOString(),
-    announcement: prompt,
-    market,
-    partners,
-    funding,
-    evaluation: {
-      verdict: evaluation.verdict,
-      risk_score: evaluation.risk_score,
-      risk_breakdown: evaluation.risk_breakdown,
-      primary_failure_modes: evaluation.primary_failure_modes,
-      journalist_reaction: evaluation.journalist_reaction,
-      recommendation: evaluation.recommendation,
-    },
-    ...(draft ? { draft } : {}),
+    ...evaluation.demoResult,
+    ...(draft ? { draft, draftReceipt } : {}),
   };
 
   try {
@@ -116,7 +108,7 @@ const persistDemoResult = (
     console.error("Could not preserve demo result:", error);
     setDemoSaveNotice({
       type: "warning",
-      message: "Your demo result could not be prepared for account saving in this browser.",
+      message: "This browser could not save your evaluation for transfer to an account. Allow site storage, or sign in and run a new readiness check.",
     });
     return null;
   }
@@ -125,13 +117,24 @@ const persistDemoResult = (
 useEffect(() => {
   if (!user) return;
 
-  fetchHistory();
+  fetchHistory().catch((error) => console.error("History refresh failed:", error));
+  return () => { historyRequestId.current += 1; };
 }, [user]);
 
 useEffect(() => {
   if (!user || demoImportInFlight.current) return;
 
-  const pendingResult = readPendingDemoResult();
+  let pendingResult: PendingDemoResult | null;
+  try {
+    pendingResult = readPendingDemoResult();
+  } catch (error) {
+    console.error("Could not recover demo result:", error);
+    setDemoSaveNotice({
+      type: "warning",
+      message: "We could not read your saved demo result in this browser. Check site storage permissions and refresh to retry. If it remains unreadable, run a new readiness check.",
+    });
+    return;
+  }
 
   if (!pendingResult) return;
 
@@ -151,12 +154,28 @@ useEffect(() => {
         throw new Error(data?.error ?? "Could not save demo result");
       }
 
-      clearPendingDemoResult(pendingResult.importId);
+      let storageCleared = true;
+      try {
+        clearPendingDemoResult(pendingResult.importId);
+      } catch (error) {
+        storageCleared = false;
+        console.error("Could not clear imported demo result:", error);
+      }
       setDemoSaveNotice({
-        type: "success",
-        message: "Your demo result has been saved to your account.",
+        type: storageCleared ? "success" : "warning",
+        message: storageCleared
+          ? "Your demo result has been saved to your account."
+          : "Your demo result was saved to your account, but this browser could not clear its pending copy. Check site storage permissions; retrying the import is safe.",
       });
-      await fetchHistory();
+      try {
+        await fetchHistory();
+      } catch (error) {
+        console.error("Imported result history refresh failed:", error);
+        setDemoSaveNotice({
+          type: "warning",
+          message: "Your demo result was saved to your account, but the archive could not refresh. Refresh the page to load your saved evaluation.",
+        });
+      }
     } catch (error) {
       console.error("Demo result import failed:", error);
       setDemoSaveNotice({
@@ -202,6 +221,8 @@ const logout = async () => {
     return;
   }
 
+  invalidateAssessment();
+  historyRequestId.current += 1;
   setUser(null);
   setHistory([]);
   setEvalData(null);
@@ -283,9 +304,9 @@ useEffect(() => {
     return alert("You've used both free demo evaluations. Create a free account to continue.");
   }
 
+  invalidateAssessment();
+  const requestRevision = briefingRevision.current;
   setIsEvaluating(true);
-  setVerdict("");
-  setOutput("");
 
   try {
     const headers = await getApiHeaders();
@@ -305,6 +326,7 @@ useEffect(() => {
     });
 
     const data = await res.json();
+    if (requestRevision !== briefingRevision.current) return;
 
       if (!res.ok) {
         if (typeof data.remainingChecks === "number") {
@@ -379,6 +401,7 @@ useEffect(() => {
       return alert("You've used your free demo draft. Create a free account to continue.");
     }
 
+  const requestRevision = ++briefingRevision.current;
   setIsGenerating(true);
   try {
     const headers = await getApiHeaders();
@@ -391,10 +414,12 @@ useEffect(() => {
         prompt,
         evaluation_id: evalData?.id ?? null,
         demoEvaluationToken: evalData?.demoEvaluationToken ?? null,
+        evaluationReceipt: evalData?.demoResult?.evaluationReceipt ?? null,
   }),
     });
 
     const data = await res.json();
+    if (requestRevision !== briefingRevision.current) return;
 
     if (!res.ok) {
       if (typeof data.remainingChecks === "number") {
@@ -416,7 +441,7 @@ useEffect(() => {
       persistDemoResult(
         evalData,
         data.response,
-        evalData?.demoImportId
+        data.draftReceipt
       );
     }
     if (typeof data.remaining_generations === "number") {
@@ -816,17 +841,17 @@ useEffect(() => {
             <div className="field-grid briefing-metadata">
               <label>
                 <span>Market</span>
-                <input value={market} onChange={(e) => setMarket(e.target.value)} />
+                <input value={market} onChange={(e) => { invalidateAssessment(); setMarket(e.target.value); }} />
               </label>
 
               <label>
                 <span>Partners / customers</span>
-                <input value={partners} onChange={(e) => setPartners(e.target.value)} />
+                <input value={partners} onChange={(e) => { invalidateAssessment(); setPartners(e.target.value); }} />
               </label>
 
               <label>
                 <span>Funding</span>
-                <input value={funding} onChange={(e) => setFunding(e.target.value)} />
+                <input value={funding} onChange={(e) => { invalidateAssessment(); setFunding(e.target.value); }} />
               </label>
             </div>
 
@@ -835,7 +860,7 @@ useEffect(() => {
               <textarea
                 rows={8}
                 value={prompt}
-                onChange={e => setPrompt(e.target.value)}
+                onChange={e => { invalidateAssessment(); setPrompt(e.target.value); }}
                 placeholder="Example: We are announcing a named customer pilot with measured results, approved customer quote, target geography, and launch timing..."
               />
             </label>
@@ -843,7 +868,7 @@ useEffect(() => {
             <div className="action-row document-action">
               <Button
                 onClick={handleEvaluate}
-                disabled={!authReady || isEvaluating || (!user && remainingDemoChecks <= 0)}
+                disabled={!authReady || isEvaluating || isGenerating || (!user && remainingDemoChecks <= 0)}
               >
                 {isEvaluating ? "Evaluating..." : "Run PR Readiness Check"}
               </Button>
@@ -963,7 +988,7 @@ useEffect(() => {
             <div className="action-row document-action">
               <Button
                 onClick={handleSubmit}
-                disabled={!authReady || isGenerating || !canGenerate}
+                disabled={!authReady || isEvaluating || isGenerating || !canGenerate}
               >
                 {isGenerating ? "Generating..." : "Generate Press Release"}
               </Button>
@@ -1024,6 +1049,7 @@ useEffect(() => {
                 className="history-item"
                 key={item.id}
                 onClick={async () => {
+                  briefingRevision.current += 1;
                   const savedEvaluation = item.evaluation_json?.risk_breakdown
                     ? item.evaluation_json
                     : item.evaluation_json?.raw ?? null;

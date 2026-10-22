@@ -1,3 +1,4 @@
+import { verifyDemoResult, verifyDraftReceipt } from "../../lib/server/demoProvenance";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
 
@@ -188,7 +189,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const verifiedUser = await getVerifiedUser(req);
-    const payload = validatePayload(req.body);
+    const validated = validatePayload(req.body);
+    const original = verifyDemoResult(req.body?.evaluationReceipt);
+    const same = (a: unknown, b: unknown): boolean => {
+      if (a === b) return true;
+      if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+      const keys = Object.keys(a);
+      return keys.length === Object.keys(b).length && keys.every(key => same(a[key], b[key]));
+    };
+    const authentic = original && ["version", "source", "importId", "timestamp", "announcement", "market", "partners", "funding", "evaluation"]
+      .every(key => same(req.body?.[key], original[key]));
+    const draft = req.body?.draft;
+    const validDraft = draft === undefined || (original && typeof draft === "string" && original.evaluation.verdict !== "NO-GO" &&
+      verifyDraftReceipt(req.body?.draftReceipt, req.body?.evaluationReceipt, draft));
+    const payload = validated && authentic && validDraft
+      ? { ...original, evaluationReceipt: req.body.evaluationReceipt, ...(draft !== undefined ? { draft } : {}) }
+      : null;
 
     if (!payload) {
       return res.status(400).json({ error: "Invalid anonymous demo result" });
@@ -216,6 +232,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             journalist_reaction: payload.evaluation.journalist_reaction,
             recommendation: payload.evaluation.recommendation,
             source: "anonymous_demo",
+            evaluationReceipt: payload.evaluationReceipt,
             demo_timestamp: payload.timestamp,
           },
         })

@@ -28,6 +28,8 @@ export type PendingDemoResult = {
       next_actions: string[];
     };
   };
+  evaluationReceipt?: string;
+  draftReceipt?: string;
   draft?: string;
 };
 
@@ -41,14 +43,16 @@ export function readPendingDemoResult(): PendingDemoResult | null {
   try {
     const parsed = JSON.parse(raw);
 
-    return parsed?.version === 1 &&
+    if (parsed?.version === 1 &&
       parsed?.source === "anonymous_demo" &&
-      typeof parsed?.importId === "string"
-      ? parsed
-      : null;
+      typeof parsed?.importId === "string") {
+      return parsed;
+    }
   } catch {
-    return null;
+    throw new Error("Stored demo result is unreadable");
   }
+
+  throw new Error("Stored demo result is unsupported");
 }
 
 export function writePendingDemoResult(result: PendingDemoResult) {
