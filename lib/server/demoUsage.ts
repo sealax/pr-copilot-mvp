@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { isIP } from "net";
 import type { NextApiRequest } from "next";
 
 export const DEMO_CHECK_LIMIT = 2;
@@ -35,9 +36,11 @@ export function getVisitorIp(req: NextApiRequest) {
   const forwardedIp = forwardedFor?.split(",")[0]?.trim();
   const realIp = firstHeaderValue(req.headers["x-real-ip"])?.trim();
   const socketIp = req.socket.remoteAddress?.trim();
-  const ip = forwardedIp || realIp || socketIp;
+  // Vercel overwrites x-forwarded-for at its edge. Never fall back to a
+  // caller-controlled alternative header on Vercel. Local servers use the socket.
+  const ip = process.env.VERCEL === "1" ? forwardedIp : socketIp || forwardedIp || realIp;
 
-  if (!ip) {
+  if (!ip || !isIP(ip)) {
     throw new Error("Could not identify demo visitor");
   }
 
@@ -122,62 +125,4 @@ export function verifyDemoEvaluationToken(
   } catch {
     return null;
   }
-}
-
-function toAllowance(row: any): DemoAllowance {
-  const checksUsed = Number.isFinite(Number(row?.readiness_checks_used))
-    ? Number(row.readiness_checks_used)
-    : 0;
-  const draftsUsed = Number.isFinite(Number(row?.drafts_used))
-    ? Number(row.drafts_used)
-    : 0;
-
-  return {
-    remainingChecks: Math.max(0, DEMO_CHECK_LIMIT - checksUsed),
-    remainingDrafts: Math.max(0, DEMO_DRAFT_LIMIT - draftsUsed),
-  };
-}
-
-export async function getDemoAllowance(supabase: any, ipHash: string) {
-  const { data, error } = await supabase
-    .from("demo_usage")
-    .select("readiness_checks_used, drafts_used")
-    .eq("ip_hash", ipHash)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Supabase demo usage fetch error:", error);
-    throw new Error("Could not check demo usage");
-  }
-
-  return toAllowance(data);
-}
-
-async function consumeDemoUsage(
-  supabase: any,
-  functionName: "consume_demo_readiness_check" | "consume_demo_draft",
-  ipHash: string
-) {
-  const { data, error } = await supabase.rpc(functionName, {
-    visitor_ip_hash: ipHash,
-  });
-
-  if (error) {
-    console.error(`Supabase ${functionName} error:`, error);
-    throw new Error("Could not update demo usage");
-  }
-
-  const row = Array.isArray(data) ? data[0] : data;
-
-  if (!row) return null;
-
-  return toAllowance(row);
-}
-
-export function consumeDemoReadinessCheck(supabase: any, ipHash: string) {
-  return consumeDemoUsage(supabase, "consume_demo_readiness_check", ipHash);
-}
-
-export function consumeDemoDraft(supabase: any, ipHash: string) {
-  return consumeDemoUsage(supabase, "consume_demo_draft", ipHash);
 }

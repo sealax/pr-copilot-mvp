@@ -47,6 +47,9 @@ export default function Home() {
   const [evalData, setEvalData] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
   const historyRequestId = useRef(0);
+  const usageRequestId = useRef(0);
+  const [remainingEvaluations, setRemainingEvaluations] = useState<number | null>(null);
+  const [evaluationLimit, setEvaluationLimit] = useState(5);
 
 useEffect(() => {
   if (!supabase) {
@@ -176,6 +179,7 @@ useEffect(() => {
           message: "Your demo result was saved to your account, but the archive could not refresh. Refresh the page to load your saved evaluation.",
         });
       }
+      await fetchUsage().catch((error) => console.error("Usage refresh failed:", error));
     } catch (error) {
       console.error("Demo result import failed:", error);
       setDemoSaveNotice({
@@ -223,6 +227,7 @@ const logout = async () => {
 
   invalidateAssessment();
   historyRequestId.current += 1;
+  usageRequestId.current += 1;
   setUser(null);
   setHistory([]);
   setEvalData(null);
@@ -231,6 +236,7 @@ const logout = async () => {
   setOutput("");
   setIsAdmin(false);
   setRemainingGenerations(null);
+  setRemainingEvaluations(null);
 };
 
 const getApiHeaders = async (requireAuth = false) => {
@@ -255,9 +261,11 @@ const getApiHeaders = async (requireAuth = false) => {
 };
 
 const fetchUsage = async () => {
+  const requestId = ++usageRequestId.current;
   const headers = await getApiHeaders();
   const res = await fetch("/api/usage", { headers });
   const data = await res.json();
+  if (requestId !== usageRequestId.current) return;
 
   if (!res.ok) {
     console.error("Usage API error:", data);
@@ -276,6 +284,8 @@ const fetchUsage = async () => {
   }
 
   setIsAdmin(data.isAdmin === true);
+  setRemainingEvaluations(typeof data.remaining_evaluations === "number" ? data.remaining_evaluations : null);
+  setEvaluationLimit(typeof data.evaluation_limit === "number" ? data.evaluation_limit : 5);
   console.info("[admin-usage-diagnostic]", {
     adminConfigPresent: data.adminConfigPresent === true,
     isAdmin: data.isAdmin === true,
@@ -300,6 +310,9 @@ useEffect(() => {
   const handleEvaluate = async () => {
   if (!authReady) return;
   if (!prompt.trim()) return alert("Add your announcement first");
+  if (user && !isAdminMode && remainingEvaluations !== null && remainingEvaluations <= 0) {
+    return alert(`You’ve used all ${evaluationLimit} free evaluations`);
+  }
   if (!user && remainingDemoChecks <= 0) {
     return alert("You've used both free demo evaluations. Create a free account to continue.");
   }
@@ -327,6 +340,7 @@ useEffect(() => {
 
     const data = await res.json();
     if (requestRevision !== briefingRevision.current) return;
+    if (typeof data.remaining_evaluations === "number") setRemainingEvaluations(data.remaining_evaluations);
 
       if (!res.ok) {
         if (typeof data.remainingChecks === "number") {
@@ -420,6 +434,7 @@ useEffect(() => {
 
     const data = await res.json();
     if (requestRevision !== briefingRevision.current) return;
+    if (typeof data.remaining_generations === "number") setRemainingGenerations(data.remaining_generations);
 
     if (!res.ok) {
       if (typeof data.remainingChecks === "number") {
@@ -820,8 +835,8 @@ useEffect(() => {
               <span className="subtle-status">
                 {user
                   ? isAdminMode
-                    ? "Admin mode — Unlimited testing"
-                    : "Ready to evaluate"
+                    ? "Admin testing — safety limits apply"
+                    : remainingEvaluations === null ? "Loading evaluation allowance" : `${remainingEvaluations} of ${evaluationLimit} free checks remaining`
                   : remainingDemoChecks > 0
                   ? `${remainingDemoChecks} demo ${remainingDemoChecks === 1 ? "check" : "checks"} remaining`
                   : "Demo checks complete"}
@@ -868,7 +883,7 @@ useEffect(() => {
             <div className="action-row document-action">
               <Button
                 onClick={handleEvaluate}
-                disabled={!authReady || isEvaluating || isGenerating || (!user && remainingDemoChecks <= 0)}
+                disabled={!authReady || isEvaluating || isGenerating || (user && !isAdminMode && remainingEvaluations === 0) || (!user && remainingDemoChecks <= 0)}
               >
                 {isEvaluating ? "Evaluating..." : "Run PR Readiness Check"}
               </Button>
@@ -964,7 +979,7 @@ useEffect(() => {
               <span className="subtle-status">
                 {user
                   ? isAdminMode
-                    ? "Admin mode — Unlimited testing"
+                    ? "Admin testing — safety limits apply"
                     : remainingGenerations === null
                       ? "Checking usage"
                       : `${remainingGenerations} of ${generationLimit} free remaining`
@@ -1111,8 +1126,8 @@ useEffect(() => {
                 <p className="pricing-description">For testing a small number of announcements.</p>
               </div>
               <ul className="pricing-features">
-                <li>5 evaluations</li>
-                <li>Basic pitch generation</li>
+                <li>5 readiness evaluations and 5 draft generations</li>
+                <li>Lifetime beta allowance after signup</li>
               </ul>
               <a className="button button-secondary" href="#workspace">
                 Start evaluating

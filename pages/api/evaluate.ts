@@ -1,11 +1,11 @@
+import { ApiReservation, UsageError, OPENAI_MODEL, OPENAI_TIMEOUT_MS, OPENAI_MAX_RETRIES, validateModelText, validatePromptSize } from "../../lib/server/apiUsage";
+
 import { createDemoResult } from "../../lib/server/demoProvenance";
 import OpenAI from "openai";
 
 import { createClient } from "@supabase/supabase-js";
 import {
-  consumeDemoReadinessCheck,
   createDemoEvaluationToken,
-  getDemoAllowance,
   getDemoVisitorHash,
 } from "../../lib/server/demoUsage";
 import {
@@ -14,7 +14,9 @@ import {
   normalizeAdminEmail,
 } from "../../lib/server/admin";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+export const config = { maxDuration: 45 };
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: OPENAI_TIMEOUT_MS, maxRetries: OPENAI_MAX_RETRIES });
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -23,11 +25,6 @@ const supabase = createClient(
 
 const MAX_ANNOUNCEMENT_LENGTH = 6000;
 const MAX_CONTEXT_FIELD_LENGTH = 1000;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const RATE_LIMIT_MAX_REQUESTS = 10;
-
-const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
-
 async function getOptionalVerifiedUser(req) {
   const authHeader = Array.isArray(req.headers.authorization)
     ? req.headers.authorization[0]
@@ -82,25 +79,8 @@ function cleanOptionalString(value: any, fallback: string, fieldName: string, ma
   return { value: safeValue };
 }
 
-function checkRateLimit(userId: string) {
-  const now = Date.now();
-  const bucket = rateLimitBuckets.get(userId);
-
-  if (!bucket || bucket.resetAt <= now) {
-    rateLimitBuckets.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return null;
-  }
-
-  if (bucket.count >= RATE_LIMIT_MAX_REQUESTS) {
-    const retryAfterSeconds = Math.ceil((bucket.resetAt - now) / 1000);
-    return `Too many evaluation requests. Try again in ${retryAfterSeconds} seconds.`;
-  }
-
-  bucket.count += 1;
-  return null;
-}
-
 export default async function handler(req, res) {
+  let reservation: ApiReservation | undefined;
   try {
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
@@ -154,25 +134,6 @@ export default async function handler(req, res) {
     }
 
     const demoIpHash = verifiedUser ? null : getDemoVisitorHash(req);
-    const rateLimitError = adminUser
-      ? null
-      : checkRateLimit(verifiedUser?.id ?? `demo:${demoIpHash}`);
-
-    if (rateLimitError) {
-      return res.status(429).json({ error: rateLimitError });
-    }
-
-    if (demoIpHash) {
-      const demoAllowance = await getDemoAllowance(supabase, demoIpHash);
-
-      if (demoAllowance.remainingChecks <= 0) {
-        return res.status(403).json({
-          error: "Free demo evaluation limit reached",
-          ...demoAllowance,
-        });
-      }
-    }
-
     // Optional fields: keep them safe and predictable
     const ctx = {
       stage: cleanStage.value,
@@ -317,8 +278,15 @@ Return ONLY valid JSON matching the schema described in the system instructions.
 Do not include markdown, headings, or any extra text.
 `;
 
+    validatePromptSize(system, user);
+    reservation = new ApiReservation(supabase, verifiedUser?.id ?? null, adminUser);
+    await reservation.reserve(req, "evaluate");
+    await reservation.dispatch();
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: OPENAI_MODEL,
+      max_completion_tokens: 2000,
+      response_format: { type: "json_object" },
       temperature: 0.3,
       messages: [
         { role: "system", content: system },
@@ -326,14 +294,24 @@ Do not include markdown, headings, or any extra text.
       ],
     });
 
-    const text = completion.choices?.[0]?.message?.content ?? "";
+    const text = validateModelText(completion);
 
 let parsed: any;
 try {
   parsed = JSON.parse(text);
 } catch (e) {
-  console.error("Model did not return valid JSON:", text);
-  return res.status(502).json({ error: "Model returned invalid JSON" });
+  throw new UsageError("Model returned invalid JSON", 502);
+}
+
+const dimensions = ["external_validation", "beneficiary_clarity", "explainability", "third_party_support", "impact_vs_activity"];
+if (!["GO", "CONDITIONAL", "NO-GO"].includes(parsed?.verdict) ||
+    typeof parsed.risk_score !== "number" || !Number.isFinite(parsed.risk_score) ||
+    !dimensions.every(key => typeof parsed.risk_breakdown?.[key] === "number" && Number.isFinite(parsed.risk_breakdown[key])) ||
+    !Array.isArray(parsed.primary_failure_modes) || !parsed.primary_failure_modes.every(item => typeof item === "string") ||
+    typeof parsed.journalist_reaction !== "string" || !parsed.journalist_reaction.trim() ||
+    typeof parsed.recommendation?.summary !== "string" || !parsed.recommendation.summary.trim() ||
+    !Array.isArray(parsed.recommendation.next_actions) || !parsed.recommendation.next_actions.every(item => typeof item === "string")) {
+  throw new UsageError("AI returned an incomplete evaluation. Please try again.", 502);
 }
 
 // Validate + clamp
@@ -382,69 +360,29 @@ const evaluationResponse = {
   }
 };
 
-if (!verifiedUser && demoIpHash) {
-  const demoAllowance = await consumeDemoReadinessCheck(supabase, demoIpHash);
-
-  if (!demoAllowance) {
-    const currentAllowance = await getDemoAllowance(supabase, demoIpHash);
-    return res.status(403).json({
-      error: "Free demo evaluation limit reached",
-      ...currentAllowance,
-    });
-  }
-
-  return res.status(200).json({
-    ...evaluationResponse,
-    demoResult: createDemoResult(cleanAnnouncement.value, { market: ctx.market, partners: ctx.partners, funding: ctx.funding }, evaluationResponse),
-    demoEvaluationToken: createDemoEvaluationToken(
-      demoIpHash,
-      cleanAnnouncement.value,
-      verdict
-    ),
-    ...demoAllowance,
-  });
-}
-
-const { data: insertedEvaluation, error: insertError } = await supabase
-  .from("evaluations")
-  .insert({
-    user_id: verifiedUser!.id,
-    announcement: cleanAnnouncement.value,
-    market: ctx.market,
-    partners: ctx.partners,
-    funding: ctx.funding,
-    verdict,
-    risk_score,
-    evaluation_json: {
-      risk_breakdown,
-      primary_failure_modes,
-      journalist_reaction,
-      recommendation: {
-        summary: recommendation_summary,
-        next_actions,
-      },
-    },
-  })
-  .select()
-  .single();
-
-if (insertError) {
-  console.error("Supabase insert error:", insertError);
-  return res.status(500).json({ error: "Evaluation could not be saved" });
-}
-
-if (!insertedEvaluation?.id) {
-  console.error("Supabase insert did not return an evaluation id");
-  return res.status(500).json({ error: "Evaluation could not be saved" });
-}
-
+const demoResult = !verifiedUser
+  ? createDemoResult(cleanAnnouncement.value, { market: ctx.market, partners: ctx.partners, funding: ctx.funding }, evaluationResponse)
+  : undefined;
+const demoEvaluationToken = !verifiedUser && demoIpHash
+  ? createDemoEvaluationToken(demoIpHash, cleanAnnouncement.value, verdict)
+  : undefined;
+const completed = await reservation.complete({
+  announcement: cleanAnnouncement.value, market: ctx.market, partners: ctx.partners, funding: ctx.funding,
+  verdict, risk_score, evaluation_json: {
+    risk_breakdown, primary_failure_modes, journalist_reaction,
+    recommendation: { summary: recommendation_summary, next_actions },
+  },
+});
 return res.status(200).json({
-  id: insertedEvaluation.id,
+  ...(verifiedUser ? { id: completed.id } : { demoResult, demoEvaluationToken }),
   ...evaluationResponse,
+  ...completed.usage,
 });
 
 
   } catch (err) {
+    await reservation?.release();
+    if (err instanceof UsageError) return res.status(err.status).json({ error: err.message, ...err.usage });
     if (err instanceof Error && err.message === "Invalid Supabase access token") {
       return res.status(401).json({ error: "Invalid Supabase access token" });
     }
